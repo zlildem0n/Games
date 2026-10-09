@@ -1,110 +1,45 @@
 #!/bin/sh
 # ==============================================================================
-# UNIVERSAL CONSOLE TRIGGER MONITOR ENGINE - LAN BRIDGE OPTIMIZED
+# UNIVERSAL CONSOLE PORT WATCHER - ULTRA-LIGHTWEIGHT CRASH-PROOF BUILD
 # ==============================================================================
 
 # CONSOLE TARGET PROFILES
-XBOX1_IP="192.168.1.15"
 XBOX1_PORT="49806"
-XBOX2_IP="192.168.1.6"
 XBOX2_PORT="49290"
-MAX_LATENCY=70
 
-BLOCKED_FILE="/root/COD_Blocked.txt"
-OFFICIAL_FILE="/root/COD_Official_Allowed.txt"
-PENDING_FILE="/root/COD_Pending.txt"
-UNPINGABLE_FILE="/root/COD_Unpingable.txt"
+SCAN_SCRIPT="/root/cod_mass_scan.sh"
+LOCK_FILE="/tmp/cod_scan.lock"
 MASTER_FILE="/root/COD_Master.txt"
 DUMP_FILE="/root/COD_Dump.txt"
 
-touch "$BLOCKED_FILE" "$OFFICIAL_FILE" "$PENDING_FILE" "$UNPINGABLE_FILE" "$MASTER_FILE" "$DUMP_FILE"
+# Clean out old lock configurations on initialization
+rm -f "$LOCK_FILE"
 
-deduplicate_lists() {
-    for f in Blocked Official_Allowed Pending Unpingable Master; do
-        [ -s "/root/COD_${f}.txt" ] && sort -u "/root/COD_${f}.txt" -o "/root/COD_${f}.txt"
-    done
-}
+echo "[*] COD Live Port Sensor Active. Monitoring LAN ports..."
 
-update_master_db() {
-    _subnet="$1"
-    _status="$2"
-    _escaped=$(echo "$_subnet" | sed 's/\./\\./g; s/\//\\\//g')
-    if grep -q "^$_subnet" "$MASTER_FILE"; then
-        sed -i "s/^${_escaped}.*/${_escaped} #${_status}/" "$MASTER_FILE"
-    else
-        echo "${_subnet} #${_status}" >> "$MASTER_FILE"
-    fi
-}
-
-process_dump_file() {
-    if [ -s "$DUMP_FILE" ]; then
-        _temp="/tmp/cod_dump_queue.txt"
-        mv "$DUMP_FILE" "$_temp" && touch "$DUMP_FILE"
-        _wan_ip=$(ip -4 route get 1.1.1.1 | grep -oE 'src [0-9.]+' | awk '{print $2}')
-        
-        while read -r SUBNET; do
-            [ -z "$SUBNET" ] && continue
-            grep -q "^$SUBNET" "$BLOCKED_FILE" && continue
-            TARGET_IP=$(echo "$SUBNET" | awk -F/ '{print $1}' | awk -F. '{print $1"."$2"."$3".1"}')
-            
-            if [ -n "$_wan_ip" ]; then
-                PING_TIME=$(ping -4 -I "$_wan_ip" -c 2 -W 1 "$TARGET_IP" 2>/dev/null | grep avg | awk -F/ '{print $5}' | cut -d. -f1)
-            else
-                PING_TIME=$(ping -4 -c 2 -W 1 "$TARGET_IP" 2>/dev/null | grep avg | awk -F/ '{print $5}' | cut -d. -f1)
-            fi
-            
-            if [ -n "$PING_TIME" ] && [ "$PING_TIME" -le "$MAX_LATENCY" ]; then
-                echo "$SUBNET" >> "$PENDING_FILE" && update_master_db "$SUBNET" "Pending"
-            elif [ -n "$PING_TIME" ]; then
-                echo "$SUBNET" >> "$BLOCKED_FILE" && update_master_db "$SUBNET" "Blocked"
-            else
-                echo "$SUBNET" >> "$UNPINGABLE_FILE" && update_master_db "$SUBNET" "Unpingable"
-            fi
-        done < "$_temp"
-        rm -f "$_temp" && deduplicate_lists
-    fi
-}
-
-# HARDWARE SAFE TRIGGER: Intercepts raw Xbox ports on the local LAN bridge (br0) before flow acceleration occurs
-tcpdump -ni br0 -n -l "udp and (src host $XBOX1_IP and sport $XBOX1_PORT) or (src host $XBOX2_IP and sport $XBOX2_PORT)" 2>/dev/null | while read -r tripwire_packet; do
+# Taps the local bridge. Snaps awake if either Xbox fires outbound gaming data
+tcpdump -ni br0 -n -l "udp and (sport $XBOX1_PORT or sport $XBOX2_PORT)" 2>/dev/null | while read -r tripwire_packet; do
     
-    process_dump_file
-
-    _t_file="/tmp/cod_active_sessions.txt"
-    conntrack -L -p udp --src "$XBOX1_IP" --sport "$XBOX1_PORT" 2>/dev/null > "$_t_file"
-    conntrack -L -p udp --src "$XBOX2_IP" --sport "$XBOX2_PORT" 2>/dev/null >> "$_t_file"
-
-    while read -r event_line; do
-        SERVER_IP=$(echo "$event_line" | awk '{print $5}' | cut -d= -f2)
-        if [ -z "$SERVER_IP" ] || [ "$SERVER_IP" = "unreplied" ]; then continue; fi
-        SUBNET=$(echo "$SERVER_IP" | awk -F. '{print $1"."$2"."$3".0/24"}')
-
-        if ! grep -q "^$SUBNET" "$MASTER_FILE"; then
-            if grep -q "^$SUBNET" "$PENDING_FILE"; then update_master_db "$SUBNET" "Pending"
-            elif grep -q "^$SUBNET" "$UNPINGABLE_FILE"; then update_master_db "$SUBNET" "Unpingable"
-            elif grep -q "^$SUBNET" "$BLOCKED_FILE"; then update_master_db "$SUBNET" "Blocked"
-            else update_master_db "$SUBNET" "Discovered_Inbound"; fi
+    # Check if a scanning session is already handling a workload
+    if [ ! -f "$LOCK_FILE" ]; then
+        
+        # If your master history list has entries, stage them for an absolute forced audit
+        if [ -s "$MASTER_FILE" ]; then
+            touch "$LOCK_FILE"
+            echo "[!] Target gaming traffic detected! Initializing forced master list scan..."
+            
+            # Extract clean subnets out of your historical database into your triage mailbox
+            awk '{print $1}' "$MASTER_FILE" > "$DUMP_FILE"
+            
+            # Execute your public IPv4-bound scanning script directly
+            "$SCAN_SCRIPT"
+            
+            # Enforce a 15-second fast-reset gate lock to prevent duplicate loops
+            (
+                sleep 15
+                rm -f "$LOCK_FILE"
+                echo "[*] Scanner gate reset. Ready for next search queue."
+            ) &
         fi
-
-        grep -q "^$SUBNET" "$BLOCKED_FILE" && continue
-
-        if echo "$event_line" | grep -q "ASSURED" || echo "$event_line" | grep -q "mark="; then
-            _promoted=0
-            if grep -q "^$SUBNET" "$PENDING_FILE"; then
-                sed -i "s/^$SUBNET$//g" "$PENDING_FILE" 2>/dev/null
-                _promoted=1
-            fi
-            if grep -q "^$SUBNET" "$UNPINGABLE_FILE"; then
-                sed -i "s/^$SUBNET$//g" "$UNPINGABLE_FILE" 2>/dev/null
-                _promoted=1
-            fi
-            if [ "$_promoted" -eq 1 ]; then
-                sed -i '/^$/d' "$PENDING_FILE" "$UNPINGABLE_FILE" 2>/dev/null
-                echo "$SUBNET" >> "$OFFICIAL_FILE"
-                update_master_db "$SUBNET" "Official_Allowed"
-                deduplicate_lists
-            fi
-        fi
-    done < "$_t_file"
-    rm -f "$_t_file"
+    fi
 done
