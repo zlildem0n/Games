@@ -1,6 +1,6 @@
 #!/bin/sh
 # ==============================================================================
-# UNIVERSAL CONSOLE TRIGGER COD MONITOR ENGINE - PRODUCTION BUILD
+# UNIVERSAL CONSOLE TRIGGER COD MONITOR ENGINE - INTERFACE OPTIMIZED
 # ==============================================================================
 
 # CONSOLE TARGET PROFILES
@@ -65,19 +65,13 @@ process_dump_file() {
     fi
 }
 
-# UNIVERSAL TRIGGER: Snaps awake whenever either Xbox fires outbound multiplayer game traffic
-tcpdump -ni any -n -l "udp and ((src host $XBOX1_IP and sport $XBOX1_PORT) or (src host $XBOX2_IP and sport $XBOX2_PORT))" 2>/dev/null | while read -r tripwire_packet; do
+# INTERFACE ISOLATION: Locks onto the raw physical WAN link (eth4) to track outgoing match traffic perfectly
+tcpdump -ni eth4 -n -l "udp and ((src host 24.229.189.181 and sport 49806) or (src host 24.229.189.181 and sport 49290))" 2>/dev/null | while read -r tripwire_packet; do
     
     process_dump_file
 
-    ACTIVE_IP=$(echo "$tripwire_packet" | awk '{print $3}' | awk -F. '{print $1"."$2"."$3"."$4}')
-    TARGET_PORT=""
-    
-    if [ "$ACTIVE_IP" = "$XBOX1_IP" ]; then TARGET_PORT="$XBOX1_PORT"
-    elif [ "$ACTIVE_IP" = "$XBOX2_IP" ]; then TARGET_PORT="$XBOX2_PORT"
-    else continue; fi
-
-    conntrack -L -p udp --src "$ACTIVE_IP" --sport "$TARGET_PORT" 2>/dev/null | while read -r event_line; do
+    # Trace conntrack using internal LAN mappings since eth4 maps to your Public IP
+    conntrack -L -p udp --src 192.168.1.15 --sport $XBOX1_PORT 2>/dev/null || conntrack -L -p udp --src 192.168.1.6 --sport $XBOX2_PORT 2>/dev/null | while read -r event_line; do
         SERVER_IP=$(echo "$event_line" | awk '{print $5}' | cut -d= -f2)
         if [ -z "$SERVER_IP" ] || [ "$SERVER_IP" = "unreplied" ]; then continue; fi
         SUBNET=$(echo "$SERVER_IP" | awk -F. '{print $1"."$2"."$3".0/24"}')
@@ -110,3 +104,4 @@ tcpdump -ni any -n -l "udp and ((src host $XBOX1_IP and sport $XBOX1_PORT) or (s
         fi
     done
 done
+
