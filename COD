@@ -1,6 +1,6 @@
 #!/bin/sh
 # ==============================================================================
-# UNIVERSAL CONSOLE TRIGGER MONITOR ENGINE - CRASH-PROOF BUILD
+# UNIVERSAL CONSOLE TRIGGER MONITOR ENGINE - LAN BRIDGE OPTIMIZED
 # ==============================================================================
 
 # CONSOLE TARGET PROFILES
@@ -65,12 +65,11 @@ process_dump_file() {
     fi
 }
 
-# WAN INTERFACE TAPPING: Captures outbound bursts cleanly over eth4
-tcpdump -ni eth4 -n -l "udp and sport $XBOX1_PORT or sport $XBOX2_PORT" 2>/dev/null | while read -r tripwire_packet; do
+# HARDWARE SAFE TRIGGER: Intercepts raw Xbox ports on the local LAN bridge (br0) before flow acceleration occurs
+tcpdump -ni br0 -n -l "udp and (src host $XBOX1_IP and sport $XBOX1_PORT) or (src host $XBOX2_IP and sport $XBOX2_PORT)" 2>/dev/null | while read -r tripwire_packet; do
     
     process_dump_file
 
-    # CRASH-PROOF FIX: Dump active telemetry out to a clean temporary file structure
     _t_file="/tmp/cod_active_sessions.txt"
     conntrack -L -p udp --src "$XBOX1_IP" --sport "$XBOX1_PORT" 2>/dev/null > "$_t_file"
     conntrack -L -p udp --src "$XBOX2_IP" --sport "$XBOX2_PORT" 2>/dev/null >> "$_t_file"
@@ -109,6 +108,3 @@ tcpdump -ni eth4 -n -l "udp and sport $XBOX1_PORT or sport $XBOX2_PORT" 2>/dev/n
     done < "$_t_file"
     rm -f "$_t_file"
 done
-
-
-
