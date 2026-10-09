@@ -1,17 +1,13 @@
-cat << 'EOF' > /root/cod_filter.sh
 #!/bin/sh
 # ==============================================================================
-# HARDWARE-ACCELERATED COD DATABASE ENGINE (FLOW-OFFLOAD OPTIMIZED)
+# STREAMLINED COD MONITOR ENGINE - TARGETED STATIC IP ROUTING
 # ==============================================================================
 
-# CONSOLE 1 PROFILE
+# CONSOLE TARGET PROFILES
 XBOX1_IP="192.168.1.15"
 XBOX1_PORT="49806"
-
-# CONSOLE 2 PROFILE
 XBOX2_IP="192.168.1.6"
 XBOX2_PORT="49290"
-
 MAX_LATENCY=70
 
 BLOCKED_FILE="/root/COD_Blocked.txt"
@@ -25,19 +21,16 @@ touch "$BLOCKED_FILE" "$OFFICIAL_FILE" "$PENDING_FILE" "$UNPINGABLE_FILE" "$MAST
 
 deduplicate_lists() {
     for f in Blocked Official_Allowed Pending Unpingable Master; do
-        if [ -s "/root/COD_${f}.txt" ]; then
-            sort -u "/root/COD_${f}.txt" -o "/root/COD_${f}.txt"
-        fi
+        [ -s "/root/COD_${f}.txt" ] && sort -u "/root/COD_${f}.txt" -o "/root/COD_${f}.txt"
     done
 }
 
 update_master_db() {
     _subnet="$1"
     _status="$2"
-    _escaped_subnet=$(echo "$_subnet" | sed 's/\./\\./g; s/\//\\\//g')
-
+    _escaped=$(echo "$_subnet" | sed 's/\./\\./g; s/\//\\\//g')
     if grep -q "^$_subnet" "$MASTER_FILE"; then
-        sed -i "s/^${_escaped_subnet}.*/${_escaped_subnet} #${_status}/" "$MASTER_FILE"
+        sed -i "s/^${_escaped}.*/${_escaped} #${_status}/" "$MASTER_FILE"
     else
         echo "${_subnet} #${_status}" >> "$MASTER_FILE"
     fi
@@ -45,17 +38,13 @@ update_master_db() {
 
 process_dump_file() {
     if [ -s "$DUMP_FILE" ]; then
-        _temp_queue="/tmp/cod_dump_queue.txt"
-        mv "$DUMP_FILE" "$_temp_queue"
-        touch "$DUMP_FILE"
-        
-        _wan_iface=$(ip route | grep default | awk '{print $5}' | head -n 1)
+        _temp="/tmp/cod_dump_queue.txt"
+        mv "$DUMP_FILE" "$_temp" && touch "$DUMP_FILE"
         _wan_ip=$(ip -4 route get 1.1.1.1 | grep -oE 'src [0-9.]+' | awk '{print $2}')
         
         while read -r SUBNET; do
             [ -z "$SUBNET" ] && continue
-            if grep -q "^$SUBNET" "$BLOCKED_FILE"; then continue; fi
-            
+            grep -q "^$SUBNET" "$BLOCKED_FILE" && continue
             TARGET_IP=$(echo "$SUBNET" | awk -F/ '{print $1}' | awk -F. '{print $1"."$2"."$3".1"}')
             
             if [ -n "$_wan_ip" ]; then
@@ -64,31 +53,22 @@ process_dump_file() {
                 PING_TIME=$(ping -4 -c 2 -W 1 "$TARGET_IP" 2>/dev/null | grep avg | awk -F/ '{print $5}' | cut -d. -f1)
             fi
             
-            if [ -n "$PING_TIME" ]; then
-                if [ "$PING_TIME" -le "$MAX_LATENCY" ]; then
-                    echo "$SUBNET" >> "$PENDING_FILE"
-                    update_master_db "$SUBNET" "Pending"
-                else
-                    echo "$SUBNET" >> "$BLOCKED_FILE"
-                    update_master_db "$SUBNET" "Blocked"
-                fi
+            if [ -n "$PING_TIME" ] && [ "$PING_TIME" -le "$MAX_LATENCY" ]; then
+                echo "$SUBNET" >> "$PENDING_FILE" && update_master_db "$SUBNET" "Pending"
+            elif [ -n "$PING_TIME" ]; then
+                echo "$SUBNET" >> "$BLOCKED_FILE" && update_master_db "$SUBNET" "Blocked"
             else
-                echo "$SUBNET" >> "$UNPINGABLE_FILE"
-                update_master_db "$SUBNET" "Unpingable"
+                echo "$SUBNET" >> "$UNPINGABLE_FILE" && update_master_db "$SUBNET" "Unpingable"
             fi
-        done < "$_temp_queue"
-        rm "$_temp_queue"
-        deduplicate_lists
+        done < "$_temp"
+        rm -f "$_temp" && deduplicate_lists
     fi
 }
 
-# Live packet tap tripwire targeting your specific Xbox destination metrics
-tcpdump -ni any -l "udp and dst host 185.34.107.128" 2>/dev/null | while read -r tripwire_packet; do
-    
+# PINPOINT IP TRIPWIRE: Captures any port connection (3478, 3074, etc.) hitting the target directly
+tcpdump -ni any -n -l "udp and dst host 185.34.107.128" 2>/dev/null | while read -r tripwire_packet; do
     process_dump_file
-
     ACTIVE_IP=$(echo "$tripwire_packet" | awk '{print $3}' | awk -F. '{print $1"."$2"."$3"."$4}')
-    TARGET_PORT=""
     
     if [ "$ACTIVE_IP" = "$XBOX1_IP" ]; then TARGET_PORT="$XBOX1_PORT"
     elif [ "$ACTIVE_IP" = "$XBOX2_IP" ]; then TARGET_PORT="$XBOX2_PORT"
@@ -106,9 +86,8 @@ tcpdump -ni any -l "udp and dst host 185.34.107.128" 2>/dev/null | while read -r
             else update_master_db "$SUBNET" "Discovered_Inbound"; fi
         fi
 
-        if grep -q "^$SUBNET" "$BLOCKED_FILE"; then continue; fi
+        grep -q "^$SUBNET" "$BLOCKED_FILE" && continue
 
-        # FLOW ENGINE PROMOTION VERIFICATION (Fixed boundary rules logic)
         if echo "$event_line" | grep -q "ASSURED" || echo "$event_line" | grep -q "mark="; then
             _promoted=0
             if grep -q "^$SUBNET" "$PENDING_FILE"; then
@@ -119,7 +98,6 @@ tcpdump -ni any -l "udp and dst host 185.34.107.128" 2>/dev/null | while read -r
                 sed -i "\|^$SUBNET$|d" "$UNPINGABLE_FILE" 2>/dev/null
                 _promoted=1
             fi
-            
             if [ "$_promoted" -eq 1 ]; then
                 echo "$SUBNET" >> "$OFFICIAL_FILE"
                 update_master_db "$SUBNET" "Official_Allowed"
@@ -128,4 +106,3 @@ tcpdump -ni any -l "udp and dst host 185.34.107.128" 2>/dev/null | while read -r
         fi
     done
 done
-EOF
