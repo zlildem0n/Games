@@ -1,6 +1,6 @@
 #!/bin/sh
 # ==============================================================================
-# UNIVERSAL CONSOLE TRIGGER COD MONITOR ENGINE - INTERFACE OPTIMIZED
+# UNIVERSAL CONSOLE TRIGGER COD MONITOR ENGINE - INTERFACE OPTIMIZED V2
 # ==============================================================================
 
 # CONSOLE TARGET PROFILES
@@ -9,6 +9,7 @@ XBOX1_PORT="49806"
 XBOX2_IP="192.168.1.6"
 XBOX2_PORT="49290"
 MAX_LATENCY=70
+PUBLIC_IP="24.229.189.181"
 
 BLOCKED_FILE="/root/COD_Blocked.txt"
 OFFICIAL_FILE="/root/COD_Official_Allowed.txt"
@@ -65,13 +66,12 @@ process_dump_file() {
     fi
 }
 
-# INTERFACE ISOLATION: Locks onto the raw physical WAN link (eth4) to track outgoing match traffic perfectly
-tcpdump -ni eth4 -n -l "udp and ((src host 24.229.189.181 and sport 49806) or (src host 24.229.189.181 and sport 49290))" 2>/dev/null | while read -r tripwire_packet; do
+# BULLETPROOF TRIPWIRE: Captures the outbound traffic regardless of if NAT translation has occurred yet
+tcpdump -ni eth4 -n -l "udp and sport $XBOX1_PORT or sport $XBOX2_PORT" 2>/dev/null | while read -r tripwire_packet; do
     
     process_dump_file
 
-    # Trace conntrack using internal LAN mappings since eth4 maps to your Public IP
-    conntrack -L -p udp --src 192.168.1.15 --sport $XBOX1_PORT 2>/dev/null || conntrack -L -p udp --src 192.168.1.6 --sport $XBOX2_PORT 2>/dev/null | while read -r event_line; do
+    conntrack -L -p udp --src "$XBOX1_IP" --sport "$XBOX1_PORT" 2>/dev/null || conntrack -L -p udp --src "$XBOX2_IP" --sport "$XBOX2_PORT" 2>/dev/null | while read -r event_line; do
         SERVER_IP=$(echo "$event_line" | awk '{print $5}' | cut -d= -f2)
         if [ -z "$SERVER_IP" ] || [ "$SERVER_IP" = "unreplied" ]; then continue; fi
         SUBNET=$(echo "$SERVER_IP" | awk -F. '{print $1"."$2"."$3".0/24"}')
@@ -104,4 +104,5 @@ tcpdump -ni eth4 -n -l "udp and ((src host 24.229.189.181 and sport 49806) or (s
         fi
     done
 done
+
 
