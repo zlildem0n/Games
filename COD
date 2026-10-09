@@ -1,6 +1,6 @@
 #!/bin/sh
 # ==============================================================================
-# STREAMLINED COD MONITOR ENGINE - TARGETED STATIC IP ROUTING
+# UNIVERSAL CONSOLE TRIGGER COD MONITOR ENGINE - PRODUCTION BUILD
 # ==============================================================================
 
 # CONSOLE TARGET PROFILES
@@ -65,10 +65,13 @@ process_dump_file() {
     fi
 }
 
-# PINPOINT IP TRIPWIRE: Captures any port connection (3478, 3074, etc.) hitting the target directly
-tcpdump -ni any -n -l "udp and dst host 185.34.107.128" 2>/dev/null | while read -r tripwire_packet; do
+# UNIVERSAL TRIGGER: Snaps awake whenever either Xbox fires outbound multiplayer game traffic
+tcpdump -ni any -n -l "udp and ((src host $XBOX1_IP and sport $XBOX1_PORT) or (src host $XBOX2_IP and sport $XBOX2_PORT))" 2>/dev/null | while read -r tripwire_packet; do
+    
     process_dump_file
+
     ACTIVE_IP=$(echo "$tripwire_packet" | awk '{print $3}' | awk -F. '{print $1"."$2"."$3"."$4}')
+    TARGET_PORT=""
     
     if [ "$ACTIVE_IP" = "$XBOX1_IP" ]; then TARGET_PORT="$XBOX1_PORT"
     elif [ "$ACTIVE_IP" = "$XBOX2_IP" ]; then TARGET_PORT="$XBOX2_PORT"
@@ -91,14 +94,15 @@ tcpdump -ni any -n -l "udp and dst host 185.34.107.128" 2>/dev/null | while read
         if echo "$event_line" | grep -q "ASSURED" || echo "$event_line" | grep -q "mark="; then
             _promoted=0
             if grep -q "^$SUBNET" "$PENDING_FILE"; then
-                sed -i "\|^$SUBNET$|d" "$PENDING_FILE" 2>/dev/null
+                sed -i "s/^$SUBNET$//g" "$PENDING_FILE" 2>/dev/null
                 _promoted=1
             fi
             if grep -q "^$SUBNET" "$UNPINGABLE_FILE"; then
-                sed -i "\|^$SUBNET$|d" "$UNPINGABLE_FILE" 2>/dev/null
+                sed -i "s/^$SUBNET$//g" "$UNPINGABLE_FILE" 2>/dev/null
                 _promoted=1
             fi
             if [ "$_promoted" -eq 1 ]; then
+                sed -i '/^$/d' "$PENDING_FILE" "$UNPINGABLE_FILE" 2>/dev/null
                 echo "$SUBNET" >> "$OFFICIAL_FILE"
                 update_master_db "$SUBNET" "Official_Allowed"
                 deduplicate_lists
