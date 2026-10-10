@@ -1,0 +1,63 @@
+cat << 'EOF' > /root/cod_geolocation.sh
+#!/bin/sh
+# ==============================================================================
+# GAMING INFRASTRUCTURE CROSS-REFERENCE MAPPER - LIVE CLOUD VALIDATION
+# ==============================================================================
+
+MASTER_FILE="/root/COD_Master.txt"
+
+if [ ! -s "$MASTER_FILE" ]; then
+    echo "[!] Master tracking file is empty. No server signatures found yet."
+    exit 0
+fi
+
+echo "--- DATACENTER CLOUD CROSS-REFERENCE MAP ---"
+echo "================================================================================"
+printf "%-16s | %-12s | %s\n" "CAPTURED SERVER IP" "STATUS" "IDENTIFIED GAMING HOST CLUSTER (GitHub/API)"
+echo "--------------------------------------------------------------------------------"
+
+while read -r line; do
+    [ -z "$line" ] && continue
+    
+    IP_ADDR=$(echo "$line" | awk '{print $1}')
+    STATUS_TAG=$(echo "$line" | awk '{print $2}')
+    
+    # Check for core STUN/Demonware auth blocks first natively to save lookup time
+    case "$IP_ADDR" in
+        185.34.107.*)
+            printf "📍 %-16s | %-12s | %s\n" "$IP_ADDR" "$STATUS_TAG" "Activision Master STUN (Demonware Infrastructure)"
+            continue
+            ;;
+    esac
+    
+    # Query a highly accurate multi-source hosting index to match server provider fingerprints
+    PROVIDER_DATA=$(curl -s "https://ipapi.co{IP_ADDR}/json" --max-time 3)
+    
+    # Extract the ASN or Organization to identify the underlying game hosting server blade
+    HOST_ORG=$(echo "$PROVIDER_DATA" | grep -oE '"org": "[^"]+"' | cut -d'"' -f4)
+    HOST_ASN=$(echo "$PROVIDER_DATA" | grep -oE '"asn": "[^"]+"' | cut -d'"' -f4)
+    HOST_CITY=$(echo "$PROVIDER_DATA" | grep -oE '"city": "[^"]+"' | cut -d'"' -f4)
+    HOST_REGION=$(echo "$PROVIDER_DATA" | grep -oE '"region": "[^"]+"' | cut -d'"' -f4)
+    
+    if [ -n "$HOST_ORG" ]; then
+        # Map specific server companies to their known game pool tags
+        case "$HOST_ORG" in
+            *Choopa*|*Vultr*) MATCH_LABEL="Choopa/Vultr Dedicated Game Cluster" ;;
+            *i3D*|*i3d*)       MATCH_LABEL="i3D.net Premier Multiplayer Node" ;;
+            *Amazon*|*AWS*)   MATCH_LABEL="Amazon GameLift Cloud Engine" ;;
+            *Datacenter*)     MATCH_LABEL="Co-Located Regional Hosting Blade" ;;
+            *)                MATCH_LABEL="$HOST_ORG" ;;
+        esac
+        
+        LOCATION_TXT="${HOST_CITY}, ${HOST_REGION}"
+        printf "📍 %-16s | %-12s | %s [%s] (%s)\n" "$IP_ADDR" "$STATUS_TAG" "$MATCH_LABEL" "$HOST_ASN" "$LOCATION_TXT"
+    else
+        printf "❌ %-16s | %-12s | %s\n" "$IP_ADDR" "$STATUS_TAG" "[Cloud Database Timeout / Verifying]"
+    fi
+    
+    # 1-second pause to prevent hitting server rate restrictions
+    sleep 1
+done < "$MASTER_FILE"
+echo "================================================================================"
+EOF
+chmod 755 /root/cod_geolocation.sh
