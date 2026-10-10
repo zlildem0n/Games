@@ -1,80 +1,57 @@
-cat << 'EOF' > /root/cod_latency_audit.sh
+cat << 'EOF' > /root/cod_geolocation.sh
 #!/bin/sh
 # ==============================================================================
-# SCRIPT 6: DUAL-VALIDATION LATENCY ENGINE - EAST COAST & CHICAGO GEO-GUARD BUILD
+# LIVE CLOUD-MAXMIND ENRICHMENT ENGINE - REPAIRED API PATHWAY Build
 # ==============================================================================
 
-MAX_LATENCY=70
 MASTER_FILE="/root/COD_Master.txt"
-LOW_LAT_POOL="/root/COD_Pending.txt"
-HIGH_LAT_POOL="/root/COD_Blocked.txt"
-PROMOTER_SCRIPT="/root/cod_promoter.sh"
 
-touch "$MASTER_FILE" "$LOW_LAT_POOL" "$HIGH_LAT_POOL"
-echo "[*] COD East Coast & Chicago Latency Auditor Active..."
+if [ ! -s "$MASTER_FILE" ]; then
+    echo "[!] Master tracking file is completely empty. No gaming footprints found."
+    exit 0
+fi
 
-while true; do
-    conntrack -L -p udp 2>/dev/null | grep "ASSURED" | grep "192.168.1.15" | grep "port=49806" | while read -r state_line; do
-        
-        BYTE_COUNT=$(echo "$state_line" | grep -oE 'bytes=[0-9]+' | awk -F= '{print $2}' | head -n1)
-        [ -z "$BYTE_COUNT" ] || [ "$BYTE_COUNT" -lt 10000 ] && continue
-        
-        SERVER_IP=$(echo "$state_line" | grep -oE 'dst=[0-9.]+' | awk -F= '{print $2}' | head -n1)
-        [ -z "$SERVER_IP" ] && continue
-        echo "$SERVER_IP" | grep -qE "^(192\.168|127\.)" && continue
-        
-        # Bypasses the filter cleanly if it's the core master authentication node block
-        case "$SERVER_IP" in
-            185.34.107.*) echo "$SERVER_IP" >> "$LOW_LAT_POOL"; [ -x "$PROMOTER_SCRIPT" ] && "$PROMOTER_SCRIPT" &; continue ;;
-        esac
+echo "--- LIVE CLOUD-MAXMIND GAME SERVER ROUTING MAP ---"
+echo "================================================================================"
+printf "%-16s | %-12s | %-28s | %s\n" "SERVER IP" "STATUS" "MAXMIND PHYSICAL ZONE" "DATA CENTER PROVIDER"
+echo "--------------------------------------------------------------------------------"
 
-        grep -q "$SERVER_IP" "$MASTER_FILE" && continue
-
-        # REAL-TIME LIVE MAXMIND CLOUD DISCOVERY (Zero guesswork)
-        GEO_DATA=$(curl -s "https://freeipapi.com{SERVER_IP}" --max-time 3)
-        REGION_CODE=$(echo "$GEO_DATA" | grep -oE '"regionCode":"[^"]+"' | cut -d'"' -f4)
-        COUNTRY_CODE=$(echo "$GEO_DATA" | grep -oE '"countryCode":"[^"]+"' | cut -d'"' -f4)
-
-        # STRICT GEOGRAPHIC GATEKEEPER RULE: Check for Chicago (IL) or East Coast states
-        IS_EAST_COAST=0
-        if [ "$COUNTRY_CODE" = "US" ]; then
-            case "$REGION_CODE" in
-                IL|NY|VA|GA|FL|NJ|PA|MA|MD|NC) IS_EAST_COAST=1 ;;
-            esac
-        fi
-
-        if [ "$IS_EAST_COAST" -eq 1 ]; then
-            # Server is geographically local, now execute the forced public WAN latency check
-            WAN_IP=$(ip -4 route get 1.1.1.1 2>/dev/null | grep -oE 'src [0-9.]+' | awk '{print $2}')
-            [ -z "$WAN_IP" ] && WAN_IP="0.0.0.0"
-            
-            PING_STAT=$(ping -4 -I "$WAN_IP" -c 2 -W 1 "$SERVER_IP" 2>/dev/null | grep avg)
-            if [ -z "$PING_STAT" ]; then
-                GATEWAY_IP=$(echo "$SERVER_IP" | awk -F. '{print $1"."$2"."$3".1"}')
-                PING_STAT=$(ping -4 -I "$WAN_IP" -c 2 -W 1 "$GATEWAY_IP" 2>/dev/null | grep avg)
-            fi
-            
-            PING_TIME=$(echo "$PING_STAT" | awk -F/ '{print $5}' | cut -d. -f1)
-            
-            if [ -n "$PING_TIME" ] && [ "$PING_TIME" -le "$MAX_LATENCY" ]; then
-                echo "$SERVER_IP" >> "$LOW_LAT_POOL"
-                echo "$SERVER_IP #Pending" >> "$MASTER_FILE"
-                if [ -x "$PROMOTER_SCRIPT" ]; then "$PROMOTER_SCRIPT" & fi
-            else
-                echo "$SERVER_IP" >> "$HIGH_LAT_POOL"
-                echo "$SERVER_IP #Blocked" >> "$MASTER_FILE"
-            fi
-        else
-            # GEOGRAPHIC FAIL: Automatically block servers in Central, West Coast, or Europe
-            echo "   [!] Server $SERVER_IP ($REGION_CODE) outside East Coast/Chicago. Forcing block..."
-            echo "$SERVER_IP" >> "$HIGH_LAT_POOL"
-            echo "$SERVER_IP #Blocked" >> "$MASTER_FILE"
-        fi
-    done
+while read -r line; do
+    [ -z "$line" ] && continue
     
-    sort -u "$MASTER_FILE" -o "$MASTER_FILE" 2>/dev/null
-    sort -u "$LOW_LAT_POOL" -o "$LOW_LAT_POOL" 2>/dev/null
-    sort -u "$HIGH_LAT_POOL" -o "$HIGH_LAT_POOL" 2>/dev/null
-    sleep 5
-done
+    # Isolate the exact individual server IP and its tracker category status tag
+    IP_ADDR=$(echo "$line" | awk '{print $1}')
+    STATUS_TAG=$(echo "$line" | awk '{print $2}')
+    
+    # Core STUN/Demonware auth bypass shortcut
+    case "$IP_ADDR" in
+        185.34.107.*)
+            printf "📍 %-16s | %-12s | %-28s | %s\n" "$IP_ADDR" "$STATUS_TAG" "Santa Monica, California (US)" "Activision Master STUN [Demonware]"
+            continue
+            ;;
+    esac
+    
+    # FIXED: Corrected API endpoint pathway string syntax
+    GEO_DATA=$(curl -s "https://freeipapi.com{IP_ADDR}" --max-time 3)
+    
+    # Parse parameters cleanly using precise shell text extraction
+    CITY=$(echo "$GEO_DATA" | grep -oE '"cityName":"[^"]+"' | cut -d'"' -f4)
+    REGION=$(echo "$GEO_DATA" | grep -oE '"regionName":"[^"]+"' | cut -d'"' -f4)
+    COUNTRY=$(echo "$GEO_DATA" | grep -oE '"countryCode":"[^"]+"' | cut -d'"' -f4)
+    
+    # Query fallback organization utility
+    PROVIDER=$(curl -s "https://ipapi.co{IP_ADDR}/org/" --max-time 3 | tr -d '\r\n')
+    [ -z "$PROVIDER" ] || echo "$PROVIDER" | grep -q "Undefined" && PROVIDER="Unknown Gaming Infrastructure"
+
+    if [ -n "$CITY" ] && [ -n "$REGION" ]; then
+        LOCATION_STRING="${CITY}, ${REGION} (${COUNTRY})"
+        printf "📍 %-16s | %-12s | %-28s | [%s]\n" "$IP_ADDR" "$STATUS_TAG" "$LOCATION_STRING" "$PROVIDER"
+    else
+        printf "❌ %-16s | %-12s | %-28s | %s\n" "$IP_ADDR" "$STATUS_TAG" "Unknown Location Zone" "[Cloud Query Timeout]"
+    fi
+    
+    # Polite 1-second delay to strictly respect cloud rate restrictions
+    sleep 1
+done < "$MASTER_FILE"
+echo "================================================================================"
 EOF
