@@ -1,48 +1,29 @@
+# 1. Clean build the Watcher
 cat << 'EOF' > /root/cod_watcher.sh
 #!/bin/sh
-# ==============================================================================
-# SCRIPT 1: STUN-TRIGGERED COD WATCHER - PIPELINE HANDSHAKE REAPER BUILD
-# ==============================================================================
-
 XBOX_PORT="49806"
 DUMP_FILE="/root/COD_Dump.txt"
 VERIFY_SCRIPT="/root/cod_verify.sh"
 MASTER_FILE="/root/COD_Master.txt"
 LOCK_FILE="/tmp/cod_verify.lock"
 
-# Clean out old lock artifacts cleanly on initialization
 rm -f "$LOCK_FILE"
-touch "$DUMP_FILE"
-chmod 666 "$DUMP_FILE"
-
-# Automated asynchronous reaper engine to cleanly dissolve exited tasks
+touch "$DUMP_FILE" && chmod 666 "$DUMP_FILE"
 trap "wait" CHLD
-
-echo "[*] COD Reaped Watcher Active. Monitoring eth4 footprint..."
 
 tcpdump -i eth4 -n -l "udp port $XBOX_PORT" 2>/dev/null | while read -r tripwire_packet; do
     case "$tripwire_packet" in
-        *24.229.189.181.*\>*) 
-            SERVER_IP=$(echo "$tripwire_packet" | awk '{print $5}' | cut -d. -f1-4 | tr -d '\r\n ')
-            ;;
-        *\>\ 24.229.189.181.*) 
-            SERVER_IP=$(echo "$tripwire_packet" | awk '{print $3}' | cut -d. -f1-4 | tr -d '\r\n ')
-            ;;
-        *) 
-            continue 
-            ;;
+        *24.229.189.181.*\>*) SERVER_IP=$(echo "$tripwire_packet" | awk '{print $5}' | cut -d. -f1-4 | tr -d '\r\n ') ;;
+        *\>\ 24.229.189.181.*) SERVER_IP=$(echo "$tripwire_packet" | awk '{print $3}' | cut -d. -f1-4 | tr -d '\r\n ') ;;
+        *) continue ;;
     esac
 
     [ -z "$SERVER_IP" ] && continue
-    if [ "$SERVER_IP" = "192.168.1.15" ] || [ "$SERVER_IP" = "24.229.189.181" ]; then
-        continue
-    fi
+    if [ "$SERVER_IP" = "192.168.1.15" ] || [ "$SERVER_IP" = "24.229.189.181" ]; then continue; fi
     
     if ! grep -q "^$SERVER_IP" "$MASTER_FILE" 2>/dev/null; then
         echo "$SERVER_IP" >> "$DUMP_FILE"
         sort -u "$DUMP_FILE" -o "$DUMP_FILE"
-        
-        # FRONT-END GATEKEEPER LOCK: Only execute the verifier if no scan is currently running
         if [ ! -e "$LOCK_FILE" ]; then
             touch "$LOCK_FILE"
             "$VERIFY_SCRIPT" &
@@ -50,5 +31,3 @@ tcpdump -i eth4 -n -l "udp port $XBOX_PORT" 2>/dev/null | while read -r tripwire
     fi
 done
 EOF
-sed -i 's/\r//g' /root/cod_watcher.sh
-chmod 755 /root/cod_watcher.sh
