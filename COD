@@ -1,9 +1,10 @@
 cat << 'EOF' > /root/cod_watcher.sh
 #!/bin/sh
 # ==============================================================================
-# HARDENED WAN-IP HIGH-SPEED MONITOR (MATCHES LIVE HEARTBEAT FOOTPRINT)
+# SINGLE-XBOX TARGETED WAN TRIPWIRE (EXPLICIT PORT MONITOR)
 # ==============================================================================
 
+XBOX_PORT="49806"
 TARGET_NET="185.34.107.0/24"
 PUBLIC_WAN_IP="24.229.189.181"
 
@@ -15,16 +16,16 @@ DUMP_FILE="/root/COD_Dump.txt"
 # Clean out old lock configurations on initialization
 rm -f "$LOCK_FILE"
 
-echo "[*] COD Live WAN Engine Active. Tapping eth4 for Public Footprint..."
+echo "[*] COD Targeted WAN Engine Active. Monitoring Xbox 1 on Port $XBOX_PORT..."
 
-# STREAMLINED RAW CAPTURE: Replicates your exact working manual tcpdump filter
-tcpdump -n -i eth4 -l "udp and src host $PUBLIC_WAN_IP and dst net $TARGET_NET" 2>/dev/null | while read -r tripwire_packet; do
+# PINPOINT FILTER: Matches your exact working manual tcpdump capture footprint
+tcpdump -n -i eth4 -l "udp and src host $PUBLIC_WAN_IP and sport $XBOX_PORT and dst net $TARGET_NET" 2>/dev/null | while read -r tripwire_packet; do
     
     # Check if a scanning session is already handling a workload
     if [ ! -f "$LOCK_FILE" ]; then
         if [ -s "$MASTER_FILE" ]; then
             touch "$LOCK_FILE"
-            echo "[!] Live WAN Hit: Caught active heartbeat string on eth4!"
+            echo "[!] Target Hit: Xbox 1 Matchmaker Heartbeat Caught on eth4!"
             
             # Extract clean subnets out of your historical database into your triage mailbox
             awk '{print $1}' "$MASTER_FILE" > "$DUMP_FILE"
@@ -32,7 +33,7 @@ tcpdump -n -i eth4 -l "udp and src host $PUBLIC_WAN_IP and dst net $TARGET_NET" 
             # Execute your public IPv4-bound scanning script directly
             "$SCAN_SCRIPT"
             
-            # Enforce a 15-second fast-reset gate lock to prevent duplicate loops
+            # Enforce a 15-second fast-reset gate lock to match the heartbeat cadence
             (
                 sleep 15
                 rm -f "$LOCK_FILE"
