@@ -70,3 +70,42 @@ rm -f /tmp/cod_verify.lock
 if [ "$_new_pass" -eq 1 ] && [ -x "$PROMOTER_SCRIPT" ]; then
     "$PROMOTER_SCRIPT" &
 fi
+root@UCG-Ultra:~# cat /root/cod_promoter.sh
+#!/bin/sh
+
+PASSED_POOL="/root/COD_Pending.txt"
+FAILSAFE_POOL="/root/COD_Failsafe_Recovered.txt"
+OFFICIAL_POOL="/root/COD_Official_Allowed.txt"
+MASTER_FILE="/root/COD_Master.txt"
+
+_temp_queue="/tmp/cod_promoter_queue.txt"
+touch "$_temp_queue"
+
+# 1. Collect entries from the standard Pending list if they exist
+if [ -s "$PASSED_POOL" ]; then
+    cat "$PASSED_POOL" >> "$_temp_queue"
+    touch "$PASSED_POOL"
+fi
+
+# 2. Collect entries from the separate Failsafe list if they exist
+if [ -s "$FAILSAFE_POOL" ]; then
+    cat "$FAILSAFE_POOL" >> "$_temp_queue"
+    touch "$FAILSAFE_POOL"
+fi
+
+[ ! -s "$_temp_queue" ] && rm -f "$_temp_queue" && exit 0
+
+while read -r HOST_IP; do
+    [ -z "$HOST_IP" ] && continue
+
+    # Convert the individual Host IP into a /24 range
+    SUBNET=$(echo "$HOST_IP" | awk -F. '{print $1"."$2"."$3".0/24"}')
+    echo "$SUBNET" >> "$OFFICIAL_POOL"
+
+    sed -i "\|^$HOST_IP|d" "$MASTER_FILE" 2>/dev/null
+    echo "$SUBNET #Official_Allowed" >> "$MASTER_FILE"
+done < "$_temp_queue"
+
+rm -f "$_temp_queue"
+sort -u "$OFFICIAL_POOL" -o "$OFFICIAL_POOL"
+sort -u "$MASTER_FILE" -o "$MASTER_FILE"
