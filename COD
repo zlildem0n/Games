@@ -1,7 +1,6 @@
-cat << 'EOF' > /root/cod_watcher.sh
 #!/bin/sh
 # ==============================================================================
-# DUAL-DIRECTION MULTI-INTERFACE COD TRIPWIRE (FLAG SYNTAX OPTIMIZED)
+# DUAL-DIRECTION WAN IP & PORT COD WATCHER - PRODUCTION BUILD
 # ==============================================================================
 
 XBOX1_PORT="49806"
@@ -18,12 +17,12 @@ DUMP_FILE="/root/COD_Dump.txt"
 # Clean out old lock configurations on initialization
 rm -f "$LOCK_FILE"
 
-echo "[*] COD Dual-Direction Sensor Active. Monitoring via Corrected Flag Syntax..."
+echo "[*] COD WAN IP & Port Watcher Active. Monitoring via Corrected Flag Syntax..."
 
-# FIXED TRIPWIRE LINK: -n and -i any are cleanly split apart to guarantee stable execution
+# FIXED TRIPWIRE LINK: Anchored strictly onto your Public WAN IP and mapped console ports
 tcpdump -n -i any -l "udp and (
-    (dst net $TARGET_NET and dst port $STUN_PORT) or 
-    (src net $TARGET_NET and src port $STUN_PORT and dst host $PUBLIC_WAN_IP and (dst port $XBOX1_PORT or dst port $XBOX2_PORT))
+    (src host $PUBLIC_WAN_IP and (sport $XBOX1_PORT or sport $XBOX2_PORT) and dst net $TARGET_NET and dst port $STUN_PORT) or 
+    (src net $TARGET_NET and src port $STUN_PORT and dst host $PUBLIC_WAN_IP and (dport $XBOX1_PORT or dport $XBOX2_PORT))
 )" 2>/dev/null | while read -r tripwire_packet; do
     
     # Check if a scanning session is already handling a workload
@@ -47,4 +46,3 @@ tcpdump -n -i any -l "udp and (
         fi
     fi
 done
-EOF
