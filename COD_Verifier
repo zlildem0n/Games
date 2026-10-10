@@ -1,15 +1,11 @@
 cat << 'EOF' > /root/cod_verify.sh
 #!/bin/sh
 # ==============================================================================
-# SCRIPT 2: BUFFER MAILBOX PROCESSOR - COMPLETED HOST WAN REAPER
+# SCRIPT 2: BUFFER MAILBOX PROCESSOR - COMPLETED HOST WAN REAPER WITH GATEWAY FALLBACK
 # ==============================================================================
 
-if [ -e "/tmp/cod_verify.lock" ]; then
-    exit 0
-fi
-touch /tmp/cod_verify.lock
-
 MAX_LATENCY=70
+LOCK_FILE="/tmp/cod_verify.lock"
 DUMP_FILE="/root/COD_Dump.txt"
 PASSED_POOL="/root/COD_Pending.txt"
 BLOCKED_POOL="/root/COD_Blocked.txt"
@@ -41,8 +37,18 @@ while [ -s "$DUMP_FILE" ]; do
                 ;;
         esac
         
-        # Forced Interface Bind WAN Latency Audit Check
+        # 1. Primary Check: Try to ping the specific host machine directly
         PING_TIME=$(ping -4 -I "$WAN_IP" -c 2 -W 1 "$TARGET_IP" 2>/dev/null | grep avg | awk -F/ 'print $5' | cut -d. -f1)
+        
+        # 2. Fallback Gate: If the host is silent, strip the last octet and ping the x.x.x.1 gateway instead
+        if [ -z "$PING_TIME" ]; then
+            GATEWAY_IP=$(echo "$TARGET_IP" | awk -F. '{print $1"."$2"."$3".1"}')
+            echo "   [!] $TARGET_IP silent. Falling back to edge router: $GATEWAY_IP"
+            PING_TIME=$(ping -4 -I "$WAN_IP" -c 2 -W 1 "$GATEWAY_IP" 2>/dev/null | grep avg | awk -F/ 'print $5' | cut -d. -f1)
+            IS_RECOVERED=1
+        else
+            IS_RECOVERED=0
+        fi
         
         LABEL_TEXT="Pending"
         if [ -n "$PING_TIME" ]; then
@@ -50,6 +56,7 @@ while [ -s "$DUMP_FILE" ]; do
                 echo "$TARGET_IP" >> "$PASSED_POOL"
                 LABEL_TEXT="Pending"
                 _new_pass=1
+                [ "$IS_RECOVERED" -eq 1 ] && echo "   -> FALLBACK SUCCESS: Saved range via gateway ($PING_TIME ms)"
             else
                 echo "$TARGET_IP" >> "$BLOCKED_POOL"
                 LABEL_TEXT="Blocked"
@@ -70,10 +77,12 @@ for pool in Pending Blocked Unpingable Master; do
     [ -f "$target" ] && sort -u "$target" -o "$target"
 done
 
-rm -f /tmp/cod_verify.lock
+# Clear the lock file to open the front-end gate for the next run
+rm -f "$LOCK_FILE"
 
 if [ "$_new_pass" -eq 1 ] && [ -x "$PROMOTER_SCRIPT" ]; then
     "$PROMOTER_SCRIPT" &
 fi
 EOF
 chmod 755 /root/cod_verify.sh
+
