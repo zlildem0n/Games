@@ -1,19 +1,44 @@
-cat << 'EOF' > /data/on_boot.d/99-cod-filter.sh
 #!/bin/sh
-# ==============================================================================
-# UNIFI PERSISTENT SYSTEM BOOT HOOK - COD ENGINE SUITE
-# ==============================================================================
 
-# Flush any dead background handles out of system tracking paths
-kill $(pgrep -f cod_watcher.sh) 2>/dev/null
-kill $(pgrep -f cod_failsafe.sh) 2>/dev/null
-killall -9 tcpdump conntrack 2>/dev/null
+UNPING_FILE="/root/COD_Unpingable.txt"
+FAILSAFE_POOL="/root/COD_Failsafe_Recovered.txt"
+MASTER_FILE="/root/COD_Master.txt"
+PROMOTER_SCRIPT="/root/cod_promoter.sh"
 
-# Clean up stale memory fence locks
-rm -f /tmp/cod_verify.lock
+touch "$FAILSAFE_POOL" && chmod 666 "$FAILSAFE_POOL"
+echo "[*] COD Conntrack Failsafe Loop Active..."
 
-# Initialize both real-time engines seamlessly in the background
-/root/cod_watcher.sh > /dev/null 2>&1 &
-/root/cod_failsafe.sh > /dev/null 2>&1 &
-EOF
-chmod 755 /data/on_boot.d/99-cod-filter.sh
+while true; do
+    conntrack -E -p udp 2>/dev/null | while read -r state_line; do
+        echo "$state_line" | grep -q "ASSURED" || continue
+        echo "$state_line" | grep -q "192.168.1.15" || continue
+        echo "$state_line" | grep -q "port=49806" || continue
+
+        BYTE_COUNT=$(echo "$state_line" | grep -oE 'packets=[0-9]+ bytes=[0-9]+' | awk -F= '{print $3}' | head -n1)
+        [ -z "$BYTE_COUNT" ] && continue
+        [ "$BYTE_COUNT" -lt 10000 ] && continue
+
+        SERVER_IP=$(echo "$state_line" | grep -oE 'dst=[0-9.]+' | awk -F= '{print $2}' | head -n1)
+        [ -z "$SERVER_IP" ] && continue
+
+        if [ "$SERVER_IP" != "192.168.1.15" ] && [ "$SERVER_IP" != "24.229.189.181" ]; then
+            if grep -q "^$SERVER_IP" "$UNPING_FILE" 2>/dev/null; then
+                echo "[!] Failsafe Match! Saved stealth server $SERVER_IP (${BYTE_COUNT}B). Recovering..."
+                sed -i "\|^$SERVER_IP|d" "$UNPING_FILE" 2>/dev/null
+
+                # Write strictly to your new dedicated separate failsafe tracking list
+                echo "$SERVER_IP" >> "$FAILSAFE_POOL"
+                sort -u "$FAILSAFE_POOL" -o "$FAILSAFE_POOL"
+
+                sed -i "\|^$SERVER_IP|d" "$MASTER_FILE" 2>/dev/null
+                echo "$SERVER_IP #Failsafe_Recovered" >> "$MASTER_FILE"
+                sort -u "$MASTER_FILE" -o "$MASTER_FILE"
+
+                if [ -x "$PROMOTER_SCRIPT" ]; then
+                    "$PROMOTER_SCRIPT" &
+                fi
+            fi
+        fi
+    done
+    sleep 2
+done
