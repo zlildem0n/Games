@@ -1,6 +1,7 @@
 cat << 'EOF' > /root/cod_watcher.sh
 #!/bin/sh
 XBOX_PORT="49806"
+XBOX_PORT="49290"
 DUMP_FILE="/root/COD_Dump.txt"
 VERIFY_SCRIPT="/root/cod_verify.sh"
 MASTER_FILE="/root/COD_Master.txt"
