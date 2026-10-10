@@ -1,29 +1,54 @@
-# 1. Clean build the Watcher
 cat << 'EOF' > /root/cod_watcher.sh
 #!/bin/sh
+# ==============================================================================
+# SCRIPT 1: STUN-TRIGGERED COD WATCHER - WIDE OPEN PORT ISOLATION BUILD
+# ==============================================================================
+
 XBOX_PORT="49806"
 DUMP_FILE="/root/COD_Dump.txt"
 VERIFY_SCRIPT="/root/cod_verify.sh"
 MASTER_FILE="/root/COD_Master.txt"
 LOCK_FILE="/tmp/cod_verify.lock"
 
+# Clean out old lock artifacts on initialization
 rm -f "$LOCK_FILE"
-touch "$DUMP_FILE" && chmod 666 "$DUMP_FILE"
+touch "$DUMP_FILE"
+chmod 666 "$DUMP_FILE"
+
+# Asynchronously harvest and dissolve exited verifier tasks instantly
 trap "wait" CHLD
 
-tcpdump -i eth4 -n -l "udp port $XBOX_PORT" 2>/dev/null | while read -r tripwire_packet; do
-    case "$tripwire_packet" in
-        *24.229.189.181.*\>*) SERVER_IP=$(echo "$tripwire_packet" | awk '{print $5}' | cut -d. -f1-4 | tr -d '\r\n ') ;;
-        *\>\ 24.229.189.181.*) SERVER_IP=$(echo "$tripwire_packet" | awk '{print $3}' | cut -d. -f1-4 | tr -d '\r\n ') ;;
-        *) continue ;;
-    esac
+echo "[*] Wide-Open COD Watcher Active. Monitoring port $XBOX_PORT globally..."
 
-    [ -z "$SERVER_IP" ] && continue
-    if [ "$SERVER_IP" = "192.168.1.15" ] || [ "$SERVER_IP" = "24.229.189.181" ]; then continue; fi
+# WIDE OPEN CAPTURE: Listens on all interfaces (-i any) for your exact console port
+tcpdump -i any -n -l "udp port $XBOX_PORT" 2>/dev/null | while read -r tripwire_packet; do
     
+    # 1. Look for packets where your public IP is the source (Outbound)
+    if echo "$tripwire_packet" | grep -q "24.229.189.181"; then
+        # If your IP is source, remote server is destination (item 5)
+        SERVER_IP=$(echo "$tripwire_packet" | awk '{print $5}' | cut -d. -f1-4 | tr -d '\r\n ')
+        
+        # If item 5 was actually your own IP due to an inbound packet, flip it to item 3
+        if [ "$SERVER_IP" = "24.229.189.181" ] || [ "$SERVER_IP" = "192.168.1.15" ]; then
+            SERVER_IP=$(echo "$tripwire_packet" | awk '{print $3}' | cut -d. -f1-4 | tr -d '\r\n ')
+        fi
+    else
+        # 2. Backup catch-all: Extract item 5 directly
+        SERVER_IP=$(echo "$tripwire_packet" | awk '{print $5}' | cut -d. -f1-4 | tr -d '\r\n ')
+    fi
+
+    # Skip empty or local self-referencing extractions
+    [ -z "$SERVER_IP" ] && continue
+    if [ "$SERVER_IP" = "192.168.1.15" ] || [ "$SERVER_IP" = "24.229.189.181" ] || [ "$SERVER_IP" = "0.0.0.0" ]; then
+        continue
+    fi
+    
+    # Send the raw host IP straight to the verification queue
     if ! grep -q "^$SERVER_IP" "$MASTER_FILE" 2>/dev/null; then
         echo "$SERVER_IP" >> "$DUMP_FILE"
         sort -u "$DUMP_FILE" -o "$DUMP_FILE"
+        
+        # FRONT-END GATEKEEPER LOCK: Trigger the verifier if it isn't already running
         if [ ! -e "$LOCK_FILE" ]; then
             touch "$LOCK_FILE"
             "$VERIFY_SCRIPT" &
