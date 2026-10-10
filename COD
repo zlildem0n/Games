@@ -1,11 +1,9 @@
+cat << 'EOF' > /root/cod_watcher.sh
 #!/bin/sh
 # ==============================================================================
-# DUAL-DIRECTION WAN IP & PORT COD WATCHER - PRODUCTION BUILD
+# HARDENED WAN-IP HIGH-SPEED MONITOR (MATCHES LIVE HEARTBEAT FOOTPRINT)
 # ==============================================================================
 
-XBOX1_PORT="49806"
-XBOX2_PORT="49290"
-STUN_PORT="3074"
 TARGET_NET="185.34.107.0/24"
 PUBLIC_WAN_IP="24.229.189.181"
 
@@ -17,19 +15,16 @@ DUMP_FILE="/root/COD_Dump.txt"
 # Clean out old lock configurations on initialization
 rm -f "$LOCK_FILE"
 
-echo "[*] COD WAN IP & Port Watcher Active. Monitoring via Corrected Flag Syntax..."
+echo "[*] COD Live WAN Engine Active. Tapping eth4 for Public Footprint..."
 
-# FIXED TRIPWIRE LINK: Anchored strictly onto your Public WAN IP and mapped console ports
-tcpdump -n -i any -l "udp and (
-    (src host $PUBLIC_WAN_IP and (sport $XBOX1_PORT or sport $XBOX2_PORT) and dst net $TARGET_NET and dst port $STUN_PORT) or 
-    (src net $TARGET_NET and src port $STUN_PORT and dst host $PUBLIC_WAN_IP and (dport $XBOX1_PORT or dport $XBOX2_PORT))
-)" 2>/dev/null | while read -r tripwire_packet; do
+# STREAMLINED RAW CAPTURE: Replicates your exact working manual tcpdump filter
+tcpdump -n -i eth4 -l "udp and src host $PUBLIC_WAN_IP and dst net $TARGET_NET" 2>/dev/null | while read -r tripwire_packet; do
     
     # Check if a scanning session is already handling a workload
     if [ ! -f "$LOCK_FILE" ]; then
         if [ -s "$MASTER_FILE" ]; then
             touch "$LOCK_FILE"
-            echo "[!] Matchmaker Signature Caught! Initializing public IPv4 master scan..."
+            echo "[!] Live WAN Hit: Caught active heartbeat string on eth4!"
             
             # Extract clean subnets out of your historical database into your triage mailbox
             awk '{print $1}' "$MASTER_FILE" > "$DUMP_FILE"
@@ -46,3 +41,4 @@ tcpdump -n -i any -l "udp and (
         fi
     fi
 done
+EOF
