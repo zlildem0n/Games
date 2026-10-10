@@ -1,35 +1,33 @@
-cat << 'EOF' > /root/cod_watcher.sh
 #!/bin/sh
 # ==============================================================================
-# SCRIPT 1: HIGH-SPEED COD WATCHER - BUFFER LOG FILE COLLECTION BUILD
+# SCRIPT 1: STUN-TRIGGERED COD WATCHER - PINPOINT EXACT IP ENGINE
 # ==============================================================================
 
 XBOX_PORT="49806"
+STUN_PORT="3074"
+STUN_HOST_IP="185.34.107.128"
 PUBLIC_WAN_IP="24.229.189.181"
+
 DUMP_FILE="/root/COD_Dump.txt"
 VERIFY_SCRIPT="/root/cod_verify.sh"
 
 touch "$DUMP_FILE"
-echo "[*] COD Discovery Collector Active. Tapping eth4..."
+echo "[*] COD Pinpoint Watcher Active. Tapping eth4 for exact host $STUN_HOST_IP..."
 
-# Pinpoint WAN filter matching your exact working manual tcpdump layout
-tcpdump -n -i eth4 -l "udp and src host $PUBLIC_WAN_IP and sport $XBOX_PORT" 2>/dev/null | while read -r tripwire_packet; do
+# PINPOINT STUN TRIGGER: Snaps awake ONLY when your Xbox hits that exact master host IP
+tcpdump -n -i eth4 -l "udp and src host $PUBLIC_WAN_IP and sport $XBOX_PORT and dst host $STUN_HOST_IP and dst port $STUN_PORT" 2>/dev/null | while read -r tripwire_packet; do
     
-    # Extract the raw destination game server IP address
+    # Surgical extraction of the true, literal 4-octet server address from the packet header
     SERVER_IP=$(echo "$tripwire_packet" | awk '{print $5}' | cut -d. -f1-4)
     [ -z "$SERVER_IP" ] && continue
     
-    # Convert the server IP to a clean /24 subnet layout
-    SUBNET=$(echo "$SERVER_IP" | awk -F. '{print $1"."$2"."$3".0/24"}')
-    
-    # Check if this subnet is already handled or blacklisted before logging it
-    if ! grep -q "^$SUBNET" /root/COD_Master.txt 2>/dev/null; then
-        # Append the new subnet straight into your staging mailbox file
-        echo "$SUBNET" >> "$DUMP_FILE"
+    # Check if this exact individual host address is already cataloged in your master directory
+    if ! grep -q "^$SERVER_IP" /root/COD_Master.txt 2>/dev/null; then
+        # Append the literal destination address directly into your dump buffer mailbox
+        echo "$SERVER_IP" >> "$DUMP_FILE"
         sort -u "$DUMP_FILE" -o "$DUMP_FILE"
         
-        # Fire Script 2 completely hands-off to process the mailbox in its own memory block
+        # Fire Script 2 completely hands-off to process the mailbox in its own memory path
         "$VERIFY_SCRIPT" &
     fi
 done
-EOF
