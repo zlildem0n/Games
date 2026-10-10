@@ -1,32 +1,33 @@
 cat << 'EOF' > /root/cod_watcher.sh
 #!/bin/sh
 # ==============================================================================
-# SCRIPT 1: STUN-TRIGGERED COD WATCHER - HARDENED PRODUCTION BUILD
+# SCRIPT 1: STUN-TRIGGERED COD WATCHER - ETH4 PORT-ISOLATED BUILD
 # ==============================================================================
 
 XBOX_PORT="49806"
-STUN_PORT="3074"
-STUN_HOST_IP="185.34.107.128"
-PUBLIC_WAN_IP="24.229.189.181"
-
 DUMP_FILE="/root/COD_Dump.txt"
 VERIFY_SCRIPT="/root/cod_verify.sh"
 
 touch "$DUMP_FILE"
-echo "[*] COD Pinpoint Watcher Active. Monitoring eth4..."
+chmod 666 "$DUMP_FILE"
+echo "[*] COD Pinpoint Watcher Active. Monitoring eth4 via Port Isolation..."
 
-# FIXED EXECUTION PIPELINE: Cleanly split single-bracket conditions to prevent crash faults
-tcpdump -n -i eth4 -l "udp and src host $PUBLIC_WAN_IP and sport $XBOX_PORT and dst host $STUN_HOST_IP and dst port $STUN_PORT" 2>/dev/null | while read -r tripwire_packet; do
+# FIXED PIPELINE: Matches your exact working manual tcpdump filter structure over eth4
+tcpdump -i eth4 -n -l "udp port $XBOX_PORT" 2>/dev/null | while read -r tripwire_packet; do
     
+    # Surgical extraction of the true, literal 4-octet server address from the packet header
     SERVER_IP=$(echo "$tripwire_packet" | awk '{print $5}' | cut -d. -f1-4)
     [ -z "$SERVER_IP" ] && continue
     
-    if ! grep -q "^$SERVER_IP" /root/COD_Master.txt 2>/dev/null; then
-        echo "$SERVER_IP" >> "$DUMP_FILE"
-        sort -u "$DUMP_FILE" -o "$DUMP_FILE"
-        "$VERIFY_SCRIPT" &
+    # Ignore internal LAN broadcast traffic or loops
+    if [ "$SERVER_IP" != "192.168.1.15" ] && [ "$SERVER_IP" != "24.229.189.181" ]; then
+        # Check if this exact individual host address is already cataloged in your master directory
+        if ! grep -q "^$SERVER_IP" /root/COD_Master.txt 2>/dev/null; then
+            echo "$SERVER_IP" >> "$DUMP_FILE"
+            sort -u "$DUMP_FILE" -o "$DUMP_FILE"
+            "$VERIFY_SCRIPT" &
+        fi
     fi
 done
 EOF
 chmod 755 /root/cod_watcher.sh
-
