@@ -5,7 +5,7 @@ cat << 'EOF' > /root/cod_watcher.sh
 # ==============================================================================
 
 XBOX_PORT="49806"
-TARGET_NET="185.34.107.0/24"
+TARGET_NET="185.34.107.128"
 PUBLIC_WAN_IP="24.229.189.181"
 
 SCAN_SCRIPT="/root/cod_mass_scan.sh"
