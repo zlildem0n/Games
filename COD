@@ -1,11 +1,14 @@
+cat << 'EOF' > /root/cod_watcher.sh
 #!/bin/sh
 # ==============================================================================
-# UNIVERSAL CONSOLE PORT WATCHER - ULTRA-LIGHTWEIGHT CRASH-PROOF BUILD
+# DUAL-DIRECTION MULTI-INTERFACE COD TRIPWIRE (FLAG SYNTAX OPTIMIZED)
 # ==============================================================================
 
-# CONSOLE TARGET PROFILES
 XBOX1_PORT="49806"
 XBOX2_PORT="49290"
+STUN_PORT="3074"
+TARGET_NET="185.34.107.0/24"
+PUBLIC_WAN_IP="24.229.189.181"
 
 SCAN_SCRIPT="/root/cod_mass_scan.sh"
 LOCK_FILE="/tmp/cod_scan.lock"
@@ -15,18 +18,19 @@ DUMP_FILE="/root/COD_Dump.txt"
 # Clean out old lock configurations on initialization
 rm -f "$LOCK_FILE"
 
-echo "[*] COD Live Port Sensor Active. Monitoring LAN ports..."
+echo "[*] COD Dual-Direction Sensor Active. Monitoring via Corrected Flag Syntax..."
 
-# Taps the local bridge. Snaps awake if either Xbox fires outbound gaming data
-tcpdump -ni br0 -n -l "udp and (sport $XBOX1_PORT or sport $XBOX2_PORT)" 2>/dev/null | while read -r tripwire_packet; do
+# FIXED TRIPWIRE LINK: -n and -i any are cleanly split apart to guarantee stable execution
+tcpdump -n -i any -l "udp and (
+    (dst net $TARGET_NET and dst port $STUN_PORT) or 
+    (src net $TARGET_NET and src port $STUN_PORT and dst host $PUBLIC_WAN_IP and (dst port $XBOX1_PORT or dst port $XBOX2_PORT))
+)" 2>/dev/null | while read -r tripwire_packet; do
     
     # Check if a scanning session is already handling a workload
     if [ ! -f "$LOCK_FILE" ]; then
-        
-        # If your master history list has entries, stage them for an absolute forced audit
         if [ -s "$MASTER_FILE" ]; then
             touch "$LOCK_FILE"
-            echo "[!] Target gaming traffic detected! Initializing forced master list scan..."
+            echo "[!] Matchmaker Signature Caught! Initializing public IPv4 master scan..."
             
             # Extract clean subnets out of your historical database into your triage mailbox
             awk '{print $1}' "$MASTER_FILE" > "$DUMP_FILE"
@@ -43,3 +47,4 @@ tcpdump -ni br0 -n -l "udp and (sport $XBOX1_PORT or sport $XBOX2_PORT)" 2>/dev/
         fi
     fi
 done
+EOF
