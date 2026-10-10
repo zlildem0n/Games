@@ -19,7 +19,7 @@ rm -f "$LOCK_FILE"
 echo "[*] COD Targeted WAN Engine Active. Monitoring Xbox 1 on Port $XBOX_PORT..."
 
 # PINPOINT FILTER: Matches your exact working manual tcpdump capture footprint
-tcpdump -n -i eth4 -l "udp and src host $PUBLIC_WAN_IP and sport $XBOX_PORT and dst net $TARGET_NET" 2>/dev/null | while read -r tripwire_packet; do
+tcpdump -n -i eth4 -l "udp and src host $PUBLIC_WAN_IP and sport $XBOX_PORT or dst net $PUBLIC_WAN_IP" and dport $XBOX_PORT 2>/dev/null | while read -r tripwire_packet; do
     
     # Check if a scanning session is already handling a workload
     if [ ! -f "$LOCK_FILE" ]; then
