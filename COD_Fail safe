@@ -1,0 +1,19 @@
+cat << 'EOF' > /data/on_boot.d/99-cod-filter.sh
+#!/bin/sh
+# ==============================================================================
+# UNIFI PERSISTENT SYSTEM BOOT HOOK - COD ENGINE SUITE
+# ==============================================================================
+
+# Flush any dead background handles out of system tracking paths
+kill $(pgrep -f cod_watcher.sh) 2>/dev/null
+kill $(pgrep -f cod_failsafe.sh) 2>/dev/null
+killall -9 tcpdump conntrack 2>/dev/null
+
+# Clean up stale memory fence locks
+rm -f /tmp/cod_verify.lock
+
+# Initialize both real-time engines seamlessly in the background
+/root/cod_watcher.sh > /dev/null 2>&1 &
+/root/cod_failsafe.sh > /dev/null 2>&1 &
+EOF
+chmod 755 /data/on_boot.d/99-cod-filter.sh
