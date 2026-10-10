@@ -1,111 +1,44 @@
 #!/bin/sh
 
-if [ -e "/tmp/cod_verify.lock" ]; then
-    exit 0
-fi
-touch /tmp/cod_verify.lock
-
-MAX_LATENCY=70
-DUMP_FILE="/root/COD_Dump.txt"
-PASSED_POOL="/root/COD_Pending.txt"
-BLOCKED_POOL="/root/COD_Blocked.txt"
-UNPING_POOL="/root/COD_Unpingable.txt"
+UNPING_FILE="/root/COD_Unpingable.txt"
+FAILSAFE_POOL="/root/COD_Failsafe_Recovered.txt"
 MASTER_FILE="/root/COD_Master.txt"
 PROMOTER_SCRIPT="/root/cod_promoter.sh"
 
-_new_pass=0
+touch "$FAILSAFE_POOL" && chmod 666 "$FAILSAFE_POOL"
+echo "[*] COD Conntrack Failsafe Loop Active..."
 
-while [ -s "$DUMP_FILE" ]; do
-    _queue="/tmp/cod_verify_queue.txt"
-    mv "$DUMP_FILE" "$_queue" && touch "$DUMP_FILE"
+while true; do
+    conntrack -E -p udp 2>/dev/null | while read -r state_line; do
+        echo "$state_line" | grep -q "ASSURED" || continue
+        echo "$state_line" | grep -q "192.168.1.15" || continue
+        echo "$state_line" | grep -q "port=49806" || continue
 
-    WAN_IP=$(ip -4 route get 1.1.1.1 2>/dev/null | grep -oE 'src [0-9.]+' | awk '{print $2}')
-    [ -z "$WAN_IP" ] && WAN_IP=$(curl -4 -s --max-time 5 http://ifconfig.me 2>/dev/null)
+        BYTE_COUNT=$(echo "$state_line" | grep -oE 'packets=[0-9]+ bytes=[0-9]+' | awk -F= '{print $3}' | head -n1)
+        [ -z "$BYTE_COUNT" ] && continue
+        [ "$BYTE_COUNT" -lt 10000 ] && continue
 
-    while read -r TARGET_IP; do
-        [ -z "$TARGET_IP" ] && continue
+        SERVER_IP=$(echo "$state_line" | grep -oE 'dst=[0-9.]+' | awk -F= '{print $2}' | head -n1)
+        [ -z "$SERVER_IP" ] && continue
 
-        # STUN HOST EXCEPTION GATE: Force-whitelist the core authentication node block automatically
-        case "$TARGET_IP" in
-            185.34.107.*)
-                echo "$TARGET_IP" >> "$PASSED_POOL"
-                LABEL_TEXT="Pending"
-                _new_pass=1
-                sed -i "\|^$TARGET_IP|d" "$MASTER_FILE" 2>/dev/null
-                echo "$TARGET_IP #$LABEL_TEXT" >> "$MASTER_FILE"
-                continue
-                ;;
-        esac
+        if [ "$SERVER_IP" != "192.168.1.15" ] && [ "$SERVER_IP" != "24.229.189.181" ]; then
+            if grep -q "^$SERVER_IP" "$UNPING_FILE" 2>/dev/null; then
+                echo "[!] Failsafe Match! Saved stealth server $SERVER_IP (${BYTE_COUNT}B). Recovering..."
+                sed -i "\|^$SERVER_IP|d" "$UNPING_FILE" 2>/dev/null
 
-        PING_TIME=$(ping -4 -I "$WAN_IP" -c 2 -W 1 "$TARGET_IP" 2>/dev/null | grep avg | awk -F/ '{print $5}' | cut -d. -f1)
+                # Write strictly to your new dedicated separate failsafe tracking list
+                echo "$SERVER_IP" >> "$FAILSAFE_POOL"
+                sort -u "$FAILSAFE_POOL" -o "$FAILSAFE_POOL"
 
-        LABEL_TEXT="Pending"
-        if [ -n "$PING_TIME" ]; then
-            if [ "$PING_TIME" -le "$MAX_LATENCY" ]; then
-                echo "$TARGET_IP" >> "$PASSED_POOL"
-                LABEL_TEXT="Pending"
-                _new_pass=1
-            else
-                echo "$TARGET_IP" >> "$BLOCKED_POOL"
-                LABEL_TEXT="Blocked"
+                sed -i "\|^$SERVER_IP|d" "$MASTER_FILE" 2>/dev/null
+                echo "$SERVER_IP #Failsafe_Recovered" >> "$MASTER_FILE"
+                sort -u "$MASTER_FILE" -o "$MASTER_FILE"
+
+                if [ -x "$PROMOTER_SCRIPT" ]; then
+                    "$PROMOTER_SCRIPT" &
+                fi
             fi
-        else
-            echo "$TARGET_IP" >> "$UNPING_POOL"
-            LABEL_TEXT="Unpingable"
         fi
-
-        sed -i "\|^$TARGET_IP|d" "$MASTER_FILE" 2>/dev/null
-        echo "$TARGET_IP #$LABEL_TEXT" >> "$MASTER_FILE"
-    done < "$_queue"
-    rm -f "$_queue"
+    done
+    sleep 2
 done
-
-for pool in Pending Blocked Unpingable Master; do
-    target="/root/COD_${pool}.txt"
-    [ -f "$target" ] && sort -u "$target" -o "$target"
-done
-
-rm -f /tmp/cod_verify.lock
-
-if [ "$_new_pass" -eq 1 ] && [ -x "$PROMOTER_SCRIPT" ]; then
-    "$PROMOTER_SCRIPT" &
-fi
-root@UCG-Ultra:~# cat /root/cod_promoter.sh
-#!/bin/sh
-
-PASSED_POOL="/root/COD_Pending.txt"
-FAILSAFE_POOL="/root/COD_Failsafe_Recovered.txt"
-OFFICIAL_POOL="/root/COD_Official_Allowed.txt"
-MASTER_FILE="/root/COD_Master.txt"
-
-_temp_queue="/tmp/cod_promoter_queue.txt"
-touch "$_temp_queue"
-
-# 1. Collect entries from the standard Pending list if they exist
-if [ -s "$PASSED_POOL" ]; then
-    cat "$PASSED_POOL" >> "$_temp_queue"
-    touch "$PASSED_POOL"
-fi
-
-# 2. Collect entries from the separate Failsafe list if they exist
-if [ -s "$FAILSAFE_POOL" ]; then
-    cat "$FAILSAFE_POOL" >> "$_temp_queue"
-    touch "$FAILSAFE_POOL"
-fi
-
-[ ! -s "$_temp_queue" ] && rm -f "$_temp_queue" && exit 0
-
-while read -r HOST_IP; do
-    [ -z "$HOST_IP" ] && continue
-
-    # Convert the individual Host IP into a /24 range
-    SUBNET=$(echo "$HOST_IP" | awk -F. '{print $1"."$2"."$3".0/24"}')
-    echo "$SUBNET" >> "$OFFICIAL_POOL"
-
-    sed -i "\|^$HOST_IP|d" "$MASTER_FILE" 2>/dev/null
-    echo "$SUBNET #Official_Allowed" >> "$MASTER_FILE"
-done < "$_temp_queue"
-
-rm -f "$_temp_queue"
-sort -u "$OFFICIAL_POOL" -o "$OFFICIAL_POOL"
-sort -u "$MASTER_FILE" -o "$MASTER_FILE"
