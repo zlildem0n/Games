@@ -1,48 +1,35 @@
 cat << 'EOF' > /root/cod_watcher.sh
 #!/bin/sh
 # ==============================================================================
-# SCRIPT 1: GAME SERVER IP & BYTE-EXTRACTING WATCHER (WAN IP BOUNDARY SENSOR)
+# SCRIPT 1: HIGH-SPEED COD WATCHER - BUFFER LOG FILE COLLECTION BUILD
 # ==============================================================================
 
 XBOX_PORT="49806"
 PUBLIC_WAN_IP="24.229.189.181"
-
+DUMP_FILE="/root/COD_Dump.txt"
 VERIFY_SCRIPT="/root/cod_verify.sh"
-LOCK_FILE="/tmp/cod_scan.lock"
 
-# Clean out old lock configurations on initialization
-rm -f "$LOCK_FILE"
+touch "$DUMP_FILE"
+echo "[*] COD Discovery Collector Active. Tapping eth4..."
 
-echo "[*] COD Server IP & Byte Watcher Active. Monitoring footprints on eth4..."
-
-# OPEN WAN FILTER: Captures outbound UDP gaming packets to ANY server IP on eth4
+# Pinpoint WAN filter matching your exact working manual tcpdump layout
 tcpdump -n -i eth4 -l "udp and src host $PUBLIC_WAN_IP and sport $XBOX_PORT" 2>/dev/null | while read -r tripwire_packet; do
     
-    # 1. Extract the specific destination game server IP address the Xbox is contacting
+    # Extract the raw destination game server IP address
     SERVER_IP=$(echo "$tripwire_packet" | awk '{print $5}' | cut -d. -f1-4)
     [ -z "$SERVER_IP" ] && continue
     
-    # 2. Extract the raw packet length (byte size) out of the tcpdump stream trailing flag
-    PACKET_BYTES=$(echo "$tripwire_packet" | grep -oE 'length [0-9]+' | awk '{print $2}')
-    [ -z "$PACKET_BYTES" ] && PACKET_BYTES="unknown"
-
-    # Derive the /24 subnet layout from the specific server IP for database organization
+    # Convert the server IP to a clean /24 subnet layout
     SUBNET=$(echo "$SERVER_IP" | awk -F. '{print $1"."$2"."$3".0/24"}')
-
-    # Handle the lock gate and instantly pass the metrics to Script 2
-    if [ ! -f "$LOCK_FILE" ]; then
-        touch "$LOCK_FILE"
-        echo "[!] Discovery Hit: Caught $PACKET_BYTES-byte payload to $SERVER_IP. Passing to Verifier..."
+    
+    # Check if this subnet is already handled or blacklisted before logging it
+    if ! grep -q "^$SUBNET" /root/COD_Master.txt 2>/dev/null; then
+        # Append the new subnet straight into your staging mailbox file
+        echo "$SUBNET" >> "$DUMP_FILE"
+        sort -u "$DUMP_FILE" -o "$DUMP_FILE"
         
-        # Execute Script 2, handing off both the subnet and the exact byte metric
-        "$VERIFY_SCRIPT" "$SUBNET" "$PACKET_BYTES" &
-        
-        # 15-second fast-reset gate lock to match the game heartbeat cadence
-        (
-            sleep 15
-            rm -f "$LOCK_FILE"
-            echo "[*] Scanner gate reset. Ready for next search queue."
-        ) &
+        # Fire Script 2 completely hands-off to process the mailbox in its own memory block
+        "$VERIFY_SCRIPT" &
     fi
 done
 EOF
