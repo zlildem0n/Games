@@ -1,11 +1,10 @@
 cat << 'EOF' > /root/cod_watcher.sh
 #!/bin/sh
 # ==============================================================================
-# SCRIPT 1: LIVE BYTE-EXTRACTING DISCOVERY WATCHER (WAN IP BOUNDARY SENSOR)
+# SCRIPT 1: GAME SERVER IP & BYTE-EXTRACTING WATCHER (WAN IP BOUNDARY SENSOR)
 # ==============================================================================
 
 XBOX_PORT="49806"
-TARGET_NET="185.34.107.0/24"
 PUBLIC_WAN_IP="24.229.189.181"
 
 VERIFY_SCRIPT="/root/cod_verify.sh"
@@ -14,12 +13,12 @@ LOCK_FILE="/tmp/cod_scan.lock"
 # Clean out old lock configurations on initialization
 rm -f "$LOCK_FILE"
 
-echo "[*] COD Byte Watcher Active. Extracting payload metrics on eth4..."
+echo "[*] COD Server IP & Byte Watcher Active. Monitoring footprints on eth4..."
 
-# Pinpoint WAN filter matching your exact working manual tcpdump layout
-tcpdump -n -i eth4 -l "udp and src host $PUBLIC_WAN_IP and sport $XBOX_PORT and dst net $TARGET_NET" 2>/dev/null | while read -r tripwire_packet; do
+# OPEN WAN FILTER: Captures outbound UDP gaming packets to ANY server IP on eth4
+tcpdump -n -i eth4 -l "udp and src host $PUBLIC_WAN_IP and sport $XBOX_PORT" 2>/dev/null | while read -r tripwire_packet; do
     
-    # 1. Extract the destination IP address the Xbox was contacting
+    # 1. Extract the specific destination game server IP address the Xbox is contacting
     SERVER_IP=$(echo "$tripwire_packet" | awk '{print $5}' | cut -d. -f1-4)
     [ -z "$SERVER_IP" ] && continue
     
@@ -27,7 +26,7 @@ tcpdump -n -i eth4 -l "udp and src host $PUBLIC_WAN_IP and sport $XBOX_PORT and 
     PACKET_BYTES=$(echo "$tripwire_packet" | grep -oE 'length [0-9]+' | awk '{print $2}')
     [ -z "$PACKET_BYTES" ] && PACKET_BYTES="unknown"
 
-    # Calculate the /24 subnet block layout
+    # Derive the /24 subnet layout from the specific server IP for database organization
     SUBNET=$(echo "$SERVER_IP" | awk -F. '{print $1"."$2"."$3".0/24"}')
 
     # Handle the lock gate and instantly pass the metrics to Script 2
@@ -38,7 +37,7 @@ tcpdump -n -i eth4 -l "udp and src host $PUBLIC_WAN_IP and sport $XBOX_PORT and 
         # Execute Script 2, handing off both the subnet and the exact byte metric
         "$VERIFY_SCRIPT" "$SUBNET" "$PACKET_BYTES" &
         
-        # 15-second fast-reset gate lock to prevent overlapping loops
+        # 15-second fast-reset gate lock to match the game heartbeat cadence
         (
             sleep 15
             rm -f "$LOCK_FILE"
