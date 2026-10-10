@@ -1,0 +1,49 @@
+cat << 'EOF' > /root/cod_watcher.sh
+#!/bin/sh
+# ==============================================================================
+# SCRIPT 1: LIVE BYTE-EXTRACTING DISCOVERY WATCHER (WAN IP BOUNDARY SENSOR)
+# ==============================================================================
+
+XBOX_PORT="49806"
+TARGET_NET="185.34.107.0/24"
+PUBLIC_WAN_IP="24.229.189.181"
+
+VERIFY_SCRIPT="/root/cod_verify.sh"
+LOCK_FILE="/tmp/cod_scan.lock"
+
+# Clean out old lock configurations on initialization
+rm -f "$LOCK_FILE"
+
+echo "[*] COD Byte Watcher Active. Extracting payload metrics on eth4..."
+
+# Pinpoint WAN filter matching your exact working manual tcpdump layout
+tcpdump -n -i eth4 -l "udp and src host $PUBLIC_WAN_IP and sport $XBOX_PORT and dst net $TARGET_NET" 2>/dev/null | while read -r tripwire_packet; do
+    
+    # 1. Extract the destination IP address the Xbox was contacting
+    SERVER_IP=$(echo "$tripwire_packet" | awk '{print $5}' | cut -d. -f1-4)
+    [ -z "$SERVER_IP" ] && continue
+    
+    # 2. Extract the raw packet length (byte size) out of the tcpdump stream trailing flag
+    PACKET_BYTES=$(echo "$tripwire_packet" | grep -oE 'length [0-9]+' | awk '{print $2}')
+    [ -z "$PACKET_BYTES" ] && PACKET_BYTES="unknown"
+
+    # Calculate the /24 subnet block layout
+    SUBNET=$(echo "$SERVER_IP" | awk -F. '{print $1"."$2"."$3".0/24"}')
+
+    # Handle the lock gate and instantly pass the metrics to Script 2
+    if [ ! -f "$LOCK_FILE" ]; then
+        touch "$LOCK_FILE"
+        echo "[!] Discovery Hit: Caught $PACKET_BYTES-byte payload to $SERVER_IP. Passing to Verifier..."
+        
+        # Execute Script 2, handing off both the subnet and the exact byte metric
+        "$VERIFY_SCRIPT" "$SUBNET" "$PACKET_BYTES" &
+        
+        # 15-second fast-reset gate lock to prevent overlapping loops
+        (
+            sleep 15
+            rm -f "$LOCK_FILE"
+            echo "[*] Scanner gate reset. Ready for next search queue."
+        ) &
+    fi
+done
+EOF
