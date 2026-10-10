@@ -1,6 +1,7 @@
+cat << 'EOF' > /root/cod_watcher.sh
 #!/bin/sh
 # ==============================================================================
-# SCRIPT 1: STUN-TRIGGERED COD WATCHER - PINPOINT EXACT IP ENGINE
+# SCRIPT 1: STUN-TRIGGERED COD WATCHER - HARDENED PRODUCTION BUILD
 # ==============================================================================
 
 XBOX_PORT="49806"
@@ -12,22 +13,20 @@ DUMP_FILE="/root/COD_Dump.txt"
 VERIFY_SCRIPT="/root/cod_verify.sh"
 
 touch "$DUMP_FILE"
-echo "[*] COD Pinpoint Watcher Active. Tapping eth4 for exact host $STUN_HOST_IP..."
+echo "[*] COD Pinpoint Watcher Active. Monitoring eth4..."
 
-# PINPOINT STUN TRIGGER: Snaps awake ONLY when your Xbox hits that exact master host IP
+# FIXED EXECUTION PIPELINE: Cleanly split single-bracket conditions to prevent crash faults
 tcpdump -n -i eth4 -l "udp and src host $PUBLIC_WAN_IP and sport $XBOX_PORT and dst host $STUN_HOST_IP and dst port $STUN_PORT" 2>/dev/null | while read -r tripwire_packet; do
     
-    # Surgical extraction of the true, literal 4-octet server address from the packet header
     SERVER_IP=$(echo "$tripwire_packet" | awk '{print $5}' | cut -d. -f1-4)
     [ -z "$SERVER_IP" ] && continue
     
-    # Check if this exact individual host address is already cataloged in your master directory
     if ! grep -q "^$SERVER_IP" /root/COD_Master.txt 2>/dev/null; then
-        # Append the literal destination address directly into your dump buffer mailbox
         echo "$SERVER_IP" >> "$DUMP_FILE"
         sort -u "$DUMP_FILE" -o "$DUMP_FILE"
-        
-        # Fire Script 2 completely hands-off to process the mailbox in its own memory path
         "$VERIFY_SCRIPT" &
     fi
 done
+EOF
+chmod 755 /root/cod_watcher.sh
+
