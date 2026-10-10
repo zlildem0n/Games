@@ -1,44 +1,56 @@
-# 3. Clean build the Geolocation script (BUG FIXED: Fixed missing slash and variable notation)
 cat << 'EOF' > /root/cod_geolocation.sh
 #!/bin/sh
-MASTER_FILE="/root/COD_Master.txt"
-[ ! -s "$MASTER_FILE" ] && echo "[!] Master tracking file is empty." && exit 0
+# ==============================================================================
+# LIVE CLOUD-MAXMIND ENRICHMENT ENGINE - REAL-TIME DATABASE DISCOVERY
+# ==============================================================================
 
-echo "--- DATACENTER CLOUD CROSS-REFERENCE MAP ---"
+MASTER_FILE="/root/COD_Master.txt"
+
+if [ ! -s "$MASTER_FILE" ]; then
+    echo "[!] Master tracking file is completely empty. No gaming footprints found."
+    exit 0
+fi
+
+echo "--- LIVE CLOUD-MAXMIND GAME SERVER ROUTING MAP ---"
 echo "================================================================================"
-printf "%-16s | %-12s | %s\n" "CAPTURED SERVER IP" "STATUS" "IDENTIFIED GAMING HOST CLUSTER (GitHub/API)"
+printf "%-16s | %-12s | %-28s | %s\n" "SERVER IP" "STATUS" "MAXMIND PHYSICAL ZONE" "DATA CENTER PROVIDER"
 echo "--------------------------------------------------------------------------------"
 
 while read -r line; do
     [ -z "$line" ] && continue
+    
+    # Isolate the exact individual server IP and its tracker category status tag
     IP_ADDR=$(echo "$line" | awk '{print $1}')
     STATUS_TAG=$(echo "$line" | awk '{print $2}')
     
+    # Core STUN/Demonware auth bypass shortcut
     case "$IP_ADDR" in
         185.34.107.*)
-            printf "📍 %-16s | %-12s | %s\n" "$IP_ADDR" "$STATUS_TAG" "Activision Master STUN (Demonware Infrastructure)"
+            printf "📍 %-16s | %-12s | %-28s | %s\n" "$IP_ADDR" "$STATUS_TAG" "Santa Monica, California (US)" "Activision Master STUN [Demonware]"
             continue
             ;;
     esac
     
-    PROVIDER_DATA=$(curl -s "https://ipapi.co{IP_ADDR}/json" --max-time 3)
-    HOST_ORG=$(echo "$PROVIDER_DATA" | grep -oE '"org": "[^"]+"' | cut -d'"' -f4)
-    HOST_ASN=$(echo "$PROVIDER_DATA" | grep -oE '"asn": "[^"]+"' | cut -d'"' -f4)
-    HOST_CITY=$(echo "$PROVIDER_DATA" | grep -oE '"city": "[^"]+"' | cut -d'"' -f4)
-    HOST_REGION=$(echo "$PROVIDER_DATA" | grep -oE '"region": "[^"]+"' | cut -d'"' -f4)
+    # Query a high-fidelity live JSON API backed by dynamically updated MaxMind schemas
+    GEO_DATA=$(curl -s "https://freeipapi.com{IP_ADDR}" --max-time 3)
     
-    if [ -n "$HOST_ORG" ]; then
-        case "$HOST_ORG" in
-            *Choopa*|*Vultr*) MATCH_LABEL="Choopa/Vultr Dedicated Game Cluster" ;;
-            *i3D*|*i3d*)       MATCH_LABEL="i3D.net Premier Multiplayer Node" ;;
-            *Amazon*|*AWS*)   MATCH_LABEL="Amazon GameLift Cloud Engine" ;;
-            *Datacenter*)     MATCH_LABEL="Co-Located Regional Hosting Blade" ;;
-            *)                MATCH_LABEL="$HOST_ORG" ;;
-        esac
-        printf "📍 %-16s | %-12s | %s [%s] (%s, %s)\n" "$IP_ADDR" "$STATUS_TAG" "$MATCH_LABEL" "$HOST_ASN" "$HOST_CITY" "$HOST_REGION"
+    # Parse parameters cleanly using precise shell text extraction
+    CITY=$(echo "$GEO_DATA" | grep -oE '"cityName":"[^"]+"' | cut -d'"' -f4)
+    REGION=$(echo "$GEO_DATA" | grep -oE '"regionName":"[^"]+"' | cut -d'"' -f4)
+    COUNTRY=$(echo "$GEO_DATA" | grep -oE '"countryCode":"[^"]+"' | cut -d'"' -f4)
+    
+    # Query a fallback ASN utility if the host provider name is clipped
+    PROVIDER=$(curl -s "https://ipapi.co{IP_ADDR}/org/" --max-time 3 | tr -d '\r\n')
+    [ -z "$PROVIDER" ] || echo "$PROVIDER" | grep -q "Undefined" && PROVIDER="Unknown Gaming Infrastructure"
+
+    if [ -n "$CITY" ] && [ -n "$REGION" ]; then
+        LOCATION_STRING="${CITY}, ${REGION} (${COUNTRY})"
+        printf "📍 %-16s | %-12s | %-28s | [%s]\n" "$IP_ADDR" "$STATUS_TAG" "$LOCATION_STRING" "$PROVIDER"
     else
-        printf "❌ %-16s | %-12s | %s\n" "$IP_ADDR" "$STATUS_TAG" "[Cloud Database Timeout / Verifying]"
+        printf "❌ %-16s | %-12s | %-28s | %s\n" "$IP_ADDR" "$STATUS_TAG" "Unknown Location Zone" "[Cloud Query Timeout]"
     fi
+    
+    # Polite 1-second delay to strictly respect cloud rate restrictions
     sleep 1
 done < "$MASTER_FILE"
 echo "================================================================================"
