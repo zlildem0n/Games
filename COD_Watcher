@@ -9,8 +9,19 @@ touch "$DUMP_FILE"
 chmod 666 "$DUMP_FILE"
 
 tcpdump -i eth4 -n -l "udp port $XBOX_PORT" 2>/dev/null | while read -r tripwire_packet; do
-    SERVER_IP=$(echo "$tripwire_packet" | awk '{print $5}' | cut -d. -f1-4 | tr -d '
+    case "$tripwire_packet" in
+        *24.229.189.181.*\>*)
+            SERVER_IP=$(echo "$tripwire_packet" | awk '{print $5}' | cut -d. -f1-4 | tr -d '
  ')
+            ;;
+        *\>\ 24.229.189.181.*)
+            SERVER_IP=$(echo "$tripwire_packet" | awk '{print $3}' | cut -d. -f1-4 | tr -d '
+ ')
+            ;;
+        *)
+            continue
+            ;;
+    esac
 
     [ -z "$SERVER_IP" ] && continue
     if [ "$SERVER_IP" = "192.168.1.15" ] || [ "$SERVER_IP" = "24.229.189.181" ]; then
@@ -20,12 +31,7 @@ tcpdump -i eth4 -n -l "udp port $XBOX_PORT" 2>/dev/null | while read -r tripwire
     if ! grep -q "^$SERVER_IP" "$MASTER_FILE" 2>/dev/null; then
         echo "$SERVER_IP" >> "$DUMP_FILE"
         sort -u "$DUMP_FILE" -o "$DUMP_FILE"
-
-        # FIXED EXECUTION HAND-OFF: Run verifier and cleanly reap its exit state instantly
         ( "$VERIFY_SCRIPT" ; wait \$! ) &
     fi
-
-    # Clear out any stale background zombie hooks on every loop iteration
     wait \$! 2>/dev/null
 done
-
