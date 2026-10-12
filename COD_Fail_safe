@@ -1,8 +1,5 @@
 cat << 'EOF' > /root/cod_failsafe.sh
 #!/bin/sh
-# ==============================================================================
-# SCRIPT 4: LATENCY ENGINE - LOCAL MAXMIND + CLOUD QUORUM DUAL-STAGE PROCESSOR
-# ==============================================================================
 MASTER_FILE="/root/COD_Master.txt"
 US_ONLY_FILE="/root/COD_US_Only.txt"
 LOW_LAT_POOL="/root/COD_Pending.txt"
@@ -13,7 +10,6 @@ PROMOTER_SCRIPT="/root/cod_promoter.sh"
 touch "$MASTER_FILE" "$US_ONLY_FILE" "$LOW_LAT_POOL" "$HIGH_LAT_POOL" "$OFFICIAL_POOL"
 
 while true; do
-    # --- PHASE 1: GEOGATE INCOMING RUNNING HITS VIA LOCAL + CLOUD FAILOVER ---
     conntrack -L -p udp 2>/dev/null | grep "ASSURED" | grep "192.168.1.15" | grep "port=49806" | while read -r state_line; do
         SERVER_IP=$(echo "$state_line" | grep -oE 'dst=[0-9.]+' | awk -F= '{print $2}' | head -n1)
         [ -z "$SERVER_IP" ] && continue
@@ -22,25 +18,23 @@ while true; do
 
         IS_US=0
         
-        # Primary check using Local MaxMind (Fast Offline Scan)
-        if command -v geoiplookup >/dev/null 2>&1; then
+        # FIXED: Multi-binary local checking to support mmdblookup
+        if command -v mmdblookup >/dev/null 2>&1; then
+            LOCAL_CC=$(mmdblookup --ip "$SERVER_IP" --id country iso_code 2>/dev/null | grep -oE '"[A-Z]{2}"' | tr -d '"')
+            [ "$LOCAL_CC" = "US" ] && IS_US=1
+        elif command -v geoiplookup >/dev/null 2>&1; then
             LOCAL_CC=$(geoiplookup "$SERVER_IP" 2>/dev/null | grep -oE 'GeoIP Country Edition: [A-Z]{2}' | awk '{print $4}')
             [ "$LOCAL_CC" = "US" ] && IS_US=1
         fi
 
-        # Failover Check: If local database flags it out-of-country, check the 2 APIs
         if [ "$IS_US" -eq 0 ]; then
             CLOUD_VOTES=0
-            
-            # API 1: freeipapi.com
             GEO_DATA=$(curl -s "https://freeipapi.com{SERVER_IP}" --max-time 3)
             [ "$(echo "$GEO_DATA" | grep -oE '"countryCode":"[^"]+"' | cut -d'"' -f4)" = "US" ] && CLOUD_VOTES=$((CLOUD_VOTES + 1))
             
-            # API 2: ipinfo.io
             IPINFO_DATA=$(curl -s "https://ipinfo.io{SERVER_IP}/json" --max-time 3)
             [ "$(echo "$IPINFO_DATA" | grep -oE '"country": "[^"]+"' | cut -d'"' -f4)" = "US" ] && CLOUD_VOTES=$((CLOUD_VOTES + 1))
 
-            # Both cloud APIs must verify US territory to rescue the IP
             [ "$CLOUD_VOTES" -eq 2 ] && IS_US=1
         fi
 
@@ -53,7 +47,6 @@ while true; do
         fi
     done
 
-    # --- PHASE 2: INSPECT US ONLY POOL FOR EXACT 12 PACKETS OR 666 PACKETS ---
     if [ -s "$US_ONLY_FILE" ]; then
         conntrack -L -p udp 2>/dev/null | grep "ASSURED" | while read -r state_line; do
             PKT_COUNT=$(echo "$state_line" | grep -oE 'packets=[0-9]+' | awk -F= '{print $2}' | head -n1)
@@ -70,7 +63,6 @@ while true; do
         done
     fi
 
-    # --- PHASE 3: VOLUME CHECKSTAGE FOR ESTABLISHED DATA (>10,000 BYTES) ---
     if [ -s "$LOW_LAT_POOL" ]; then
         conntrack -L -p udp 2>/dev/null | grep "ASSURED" | while read -r state_line; do
             BYTE_COUNT=$(echo "$state_line" | grep -oE 'bytes=[0-9]+' | awk -F= '{print $2}' | head -n1)
@@ -89,4 +81,3 @@ while true; do
     sleep 5
 done
 EOF
-sed -i 's/\r//g' /root/cod_failsafe.sh && chmod 755 /root/cod_failsafe.sh
