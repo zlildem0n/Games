@@ -18,46 +18,38 @@ echo "==========================================================================
 printf "%-16s | %-12s | %-12s | %s\n" "SERVER IP" "VOLUME (BYTES)" "STATE FLAG" "PROMOTION /24 SUBNET"
 echo "--------------------------------------------------------------------------------"
 
-# Stream incoming verified IPs from the verifier's file in real-time
+# Stream live updates seamlessly from the verifier's file descriptor loop
 tail -f -n +1 "$PRE_PENDING_FILE" | while read -r line; do
     [ -z "$line" ] && continue
 
     SERVER_IP=$(echo "$line" | awk '{print $1}')
 
-    # Query conntrack specifically for total byte accounting metrics
+    # Interrogate conntrack for active UDP data metrics
     if [ -x "$(command -v conntrack)" ]; then
         RAW_TRACK=$(conntrack -L -p udp --dst "$SERVER_IP" 2>/dev/null | grep -E "sport=$XBOX_PORT|dport=$XBOX_PORT")
     else
         RAW_TRACK=$(grep -E "udp.*$SERVER_IP" /proc/net/nf_conntrack 2>/dev/null | grep -E "sport=$XBOX_PORT|dport=$XBOX_PORT")
     fi
 
-    # Drop processing if the active state session dropped out early
     [ -z "$RAW_TRACK" ] && continue
 
-    # CRITERIA 1: Verify the session contains the kernel [ASSURED] network state flag
+    # CRITERIA 1: Verify the connection is established and active
     if ! echo "$RAW_TRACK" | grep -q "ASSURED"; then
         continue
     fi
 
-    # CRITERIA 2: Parse out total transmitted bytes from the state table row
+    # CRITERIA 2: Accumulate bidirectional data flow volume
     TOTAL_BYTES=$(echo "$RAW_TRACK" | grep -oE 'bytes=[0-9]+' | cut -d'=' -f2 | awk '{sum+=$1} END {print sum}')
+    [ -z "$TOTAL_BYTES" ] && TOTAL_BYTES=0
 
-    if [ -z "$TOTAL_BYTES" ]; then
-        TOTAL_BYTES=0
-    fi
-
-    # Check if the aggregate match data flow clears your strict 10,000-byte limit
+    # Verify if traffic exceeds your 10,000-byte threshold limit
     if [ "$TOTAL_BYTES" -gt "$BYTE_THRESHOLD" ]; then
         
-        # STRUCTURAL /24 RANGE CONVERSION
-        # Cuts off the last octet and appends .0/24 (e.g., 185.34.107.42 -> 185.34.107.0/24)
+        # Convert remote endpoint to clear /24 network block notation
         SUBNET_24=$(echo "$SERVER_IP" | sed 's/\.[0-9]*$/\.0\/24/')
         
-        # Flash storage protection check before promoting to the Pending ledger
         if ! grep -q "^$SUBNET_24" "$PENDING_FILE" 2>/dev/null; then
             echo "$SUBNET_24" >> "$PENDING_FILE"
-            
-            # Print success line with the converted /24 subnet highlighted
             printf "🚀 %-16s | %-12s | \033[0;36m%-12s\033[0m | Converted: \033[0;32m%s\033[0m\n" \
                 "$SERVER_IP" "$TOTAL_BYTES" "[ASSURED]" "$SUBNET_24"
         fi
