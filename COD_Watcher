@@ -1,4 +1,3 @@
-cat << 'EOF' > /root/cod_watcher.sh
 #!/bin/sh
 XBOX_PORT="49806"
 DUMP_FILE="/root/COD_Dump.txt"
@@ -34,4 +33,3 @@ tcpdump -i eth4 -n -l "udp port $XBOX_PORT" 2>/dev/null | while read -r tripwire
         fi
     fi
 done
-EOF
