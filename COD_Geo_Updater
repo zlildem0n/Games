@@ -1,0 +1,32 @@
+#!/bin/sh
+# ==============================================================================
+# WEEKLY MAXMIND GEOLITE2 CITY BINARY UPDATER (GITHUB DIRECT SOURCE)
+# ==============================================================================
+
+# Define your source GitHub URL path here (pointing to the raw binary file)
+# Example target template: https://githubusercontent.com
+GEO_URL="https://githubusercontent.com"
+
+TARGET_DIR="/root"
+TARGET_FILE="GeoLite2-City.mmdb"
+
+# Verification Gate: Ensure network layer connectivity to GitHub before updating
+if ! curl -s --connect-timeout 5 https://github.com > /dev/null; then
+    echo "[!] GitHub platform unreachable. Skipping scheduled database refresh."
+    exit 1
+fi
+
+echo "[*] Synchronizing latest MaxMind geolocation database from GitHub..."
+TMP_MMDB="/tmp/${TARGET_FILE}_new"
+
+# Download the raw binary layout directly using redirect headers (-L)
+if curl -sSL "$GEO_URL" -o "$TMP_MMDB" && [ -s "$TMP_MMDB" ]; then
+    # Safely swap out the old footprint array layout on flash storage
+    mv -f "$TMP_MMDB" "${TARGET_DIR}/${TARGET_FILE}"
+    chmod 644 "${TARGET_DIR}/${TARGET_FILE}"
+    echo "[+] Custom database update complete: ${TARGET_DIR}/${TARGET_FILE}"
+else
+    rm -f "$TMP_MMDB"
+    echo "[!] Error: Failed to fetch binary payload. Verify your repository URL path."
+    exit 1
+fi
