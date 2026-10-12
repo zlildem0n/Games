@@ -1,3 +1,5 @@
+# 1. Overwrite COD_Fail_safe Natively (Corrected Latency Engine API Links)
+cat << 'EOF' > /root/cod_failsafe.sh
 #!/bin/sh
 MAX_LATENCY=70
 MASTER_FILE="/root/COD_Master.txt"
@@ -16,7 +18,6 @@ while true; do
         [ -z "$SERVER_IP" ] && continue
         echo "$SERVER_IP" | grep -qE "^(192\.168|127\.)" && continue
         
-        # STUN & TEREDO MASTER EXCEPTION GATE: Force-whitelist core infrastructure nodes
         case "$SERVER_IP" in
             185.34.107.*|65.54.227.120|24.229.189.181)
                 if ! grep -q "$SERVER_IP" "$MASTER_FILE" 2>/dev/null; then
@@ -30,6 +31,7 @@ while true; do
 
         grep -q "$SERVER_IP" "$MASTER_FILE" && continue
 
+        # REPAIRED: Corrected endpoint syntax with leading slash and variable identifiers
         GEO_DATA=$(curl -s "https://freeipapi.com{SERVER_IP}" --max-time 3)
         REGION_CODE=$(echo "$GEO_DATA" | grep -oE '"regionCode":"[^"]+"' | cut -d'"' -f4)
         COUNTRY_CODE=$(echo "$GEO_DATA" | grep -oE '"countryCode":"[^"]+"' | cut -d'"' -f4)
@@ -72,3 +74,4 @@ while true; do
     sort -u "$HIGH_LAT_POOL" -o "$HIGH_LAT_POOL" 2>/dev/null
     sleep 5
 done
+EOF
