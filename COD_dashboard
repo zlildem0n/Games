@@ -1,35 +1,55 @@
 #!/bin/sh
 # ==============================================================================
-# SCRIPT 5: VISUAL SCOREBOARD COCKPIT - PRODUCTION STABILIZED
+# SCRIPT 8: CENTRALIZED MONITORING COMMAND CONSOLE DASHBOARD
 # ==============================================================================
 
+# Define absolute file matrix targets
+DUMP="/root/COD_Dump.txt"
+PRE_PENDING="/root/COD_Pre_Pending.txt"
+PENDING="/root/COD_Pending.txt"
+POST_PENDING="/root/COD_Post_Pending.txt"
+BLOCKED="/root/COD_Blocked.txt"
+UNPINGABLE="/root/COD_Unpingable.txt"
+OFFICIAL="/root/COD_Official_Allowed.txt"
+MASTER="/root/COD_Master.txt"
+
+# Clear terminal screen completely before starting the engine layout
 clear
-echo "--- ACTIVE GAME SCOREBOARD (5s Refresh) ---"
-echo "=============================================="
 
-if ps w | grep -v grep | grep -q "cod_watcher.sh"; then
-    STATUS_WATCHER="[ ACTIVE ]"
-else
-    STATUS_WATCHER="[ INACTIVE ]"
-fi
+while true; do
+    # Jump back to the top-left terminal coordinates to avoid scrolling lag
+    printf "\033[H"
+    
+    # Calculate unique row lines inside each tracking file container
+    # Handles missing file checks safely by outputting 0 if empty
+    cnt_dump=$(wc -l "$DUMP" 2>/dev/null | awk '{print $1}')
+    cnt_pre=$(wc -l "$PRE_PENDING" 2>/dev/null | awk '{print $1}')
+    cnt_pend=$(wc -l "$PENDING" 2>/dev/null | awk '{print $1}')
+    cnt_post=$(wc -l "$POST_PENDING" 2>/dev/null | awk '{print $1}')
+    cnt_block=$(wc -l "$BLOCKED" 2>/dev/null | awk '{print $1}')
+    cnt_unping=$(wc -l "$UNPINGABLE" 2>/dev/null | awk '{print $1}')
+    cnt_off=$(wc -l "$OFFICIAL" 2>/dev/null | awk '{print $1}')
+    cnt_mast=$(wc -l "$MASTER" 2>/dev/null | awk '{print $1}')
 
-if ps w | grep -v grep | grep -q -E "cod_failsafe.sh|cod_latency_audit.sh"; then
-    STATUS_AUDITOR="[ ACTIVE ]"
-else
-    STATUS_AUDITOR="[ INACTIVE ]"
-fi
+    echo "================================================================================"
+    echo "         🛡️  CALL OF DUTY HIGH-SPEED GAME SERVER MONITORING CONSOLE 🛡️          "
+    echo "================================================================================"
+    echo " TIME SNAPSHOT : $(date '+%Y-%m-%d %H:%M:%S')"
+    echo "--------------------------------------------------------------------------------"
+    echo "  [+] STAGE 1: Live Snipped Queue (COD_Dump.txt)          : ${cnt_dump:-0} IPs"
+    echo "  [+] STAGE 2: Conntrack Verified (COD_Pre_Pending.txt)  : ${cnt_pre:-0} IPs"
+    echo "  [+] STAGE 3: Converted Subnets (COD_Pending.txt)       : ${cnt_pend:-0} /24 Blocks"
+    echo "--------------------------------------------------------------------------------"
+    echo "  📊 VALIDATION MATRICES & PROMOTIONS:"
+    printf "  🟢 Optimal Servers (<70ms)    (COD_Post_Pending.txt)    : \033[0;32m%s /24 Blocks\033[0m\n" "${cnt_post:-0}"
+    printf "  ❌ High Latency Filter (>70ms) (COD_Blocked.txt)         : \033[0;31m%s /24 Blocks\033[0m\n" "${cnt_block:-0}"
+    printf "  ⚠️  Firewalled/Dead Nodes      (COD_Unpingable.txt)      : \033[0;33m%s /24 Blocks\033[0m\n" "${cnt_unping:-0}"
+    echo "--------------------------------------------------------------------------------"
+    echo "  🛡️  MASTER WHITELISTS & GAME INFRASTRUCTURE:"
+    echo "  🏢 Official Demonware Ports   (COD_Official_Allowed.txt): ${cnt_off:-0} Permanent"
+    echo "  👑 Master Archived Footprints  (COD_Master.txt)          : ${cnt_mast:-0} Total Entries"
+    echo "================================================================================"
+    echo " Press [CTRL+C] to minimize console panel view safely."
 
-printf "  Packet Watcher:     %s\n" "$STATUS_WATCHER"
-printf "  Latency Auditor:    %s\n" "$STATUS_AUDITOR"
-echo "----------------------------------------------"
-
-echo "  Dump Mailbox:       $(wc -l < /root/COD_Dump.txt 2>/dev/null || echo 0)"
-echo "  US Only Staging:    $(wc -l < /root/COD_US_Only.txt 2>/dev/null || echo 0)"
-echo "  Pre-Pending (666):  $(wc -l < /root/COD_Pre_Pending.txt 2>/dev/null || echo 0)"
-echo "  Official Allowed:   $(wc -l < /root/COD_Official_Allowed.txt 2>/dev/null || echo 0)"
-echo "  Pending (Standard): $(wc -l < /root/COD_Pending.txt 2>/dev/null || echo 0)"
-echo "  Blocked:            $(grep -c '#Blocked' /root/COD_Master.txt 2>/dev/null || echo 0)"
-echo "  Unpingable Pool:    $(wc -l < /root/COD_Unpingable.txt 2>/dev/null || echo 0)"
-echo "----------------------------------------------"
-echo "  Total Logs:         $(wc -l < /root/COD_Master.txt 2>/dev/null || echo 0)"
-echo "=============================================="
+    sleep 2
+done
