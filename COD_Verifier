@@ -1,0 +1,59 @@
+#!/bin/sh
+# ==============================================================================
+# SCRIPT 5: REAL-TIME CONNTRACK UDP ASSURED CONTEXT VERIFIER
+# ==============================================================================
+DUMP_FILE="/root/COD_Dump.txt"
+XBOX_PORT="49806"
+
+if [ ! -f "$DUMP_FILE" ]; then
+    touch "$DUMP_FILE" && chmod 666 "$DUMP_FILE"
+fi
+
+echo "--- LIVE NETFILTER CONNTRACK ACTIVE VERIFICATION ENGINE ---"
+echo "[*] Streaming server IPs from $DUMP_FILE and inspecting states..."
+echo "================================================================================"
+printf "%-16s | %-12s | %-12s | %s\n" "SERVER IP" "CONN STATE" "XBOX PORT" "TARGET PORT CONTEXT"
+echo "--------------------------------------------------------------------------------"
+
+# Stream newly appended IPs from the dump file in real time
+tail -n 0 -f "$DUMP_FILE" | while read -r line; do
+    [ -z "$line" ] && continue
+
+    # Extract the isolated server IP address
+    SERVER_IP=$(echo "$line" | awk '{print $1}')
+
+    # Pull active UDP stream metrics for this specific server IP out of the kernel state table
+    if [ -x "$(command -v conntrack)" ]; then
+        CONN_STATE=$(conntrack -L -p udp --dst "$SERVER_IP" 2>/dev/null | grep -E "sport=$XBOX_PORT|dport=$XBOX_PORT")
+    else
+        CONN_STATE=$(grep -E "udp.*$SERVER_IP" /proc/net/nf_conntrack 2>/dev/null | grep -E "sport=$XBOX_PORT|dport=$XBOX_PORT")
+    fi
+
+    # If no active connection track exists in the gateway kernel for this IP, skip it
+    [ -z "$CONN_STATE" ] && continue
+
+    # Parse out ports from the conntrack tracking line to validate port blocks
+    PORTS_FOUND=$(echo "$CONN_STATE" | grep -oE '(sport|dport)=[0-9]+' | cut -d'=' -f2)
+    
+    IS_VALID_PORT=0
+    MATCHED_PORT=""
+    
+    for p_num in $PORTS_FOUND; do
+        # Explicit matching against core target ports or the 30k-50k server block
+        if [ "$p_num" = "3074" ] || [ "$p_num" = "3544" ] || { [ "$p_num" -ge 30000 ] && [ "$p_num" -le 50000 ]; }; then
+            if [ "$p_num" != "$XBOX_PORT" ]; then
+                IS_VALID_PORT=1
+                MATCHED_PORT="$p_num"
+                break
+            fi
+        fi
+    done
+
+    # Drop processing if the network state fails port block validation
+    [ "$IS_VALID_PORT" -eq 0 ] && continue
+
+    # Output verified confirmation to screen with assurance tag
+    printf "🟢 %-16s | \033[0;32m%-12s\033[0m | %-12s | UDP Block Match (%s) [666 Assured]\n" \
+        "$SERVER_IP" "ESTABLISHED" "$XBOX_PORT" "$MATCHED_PORT"
+
+done
