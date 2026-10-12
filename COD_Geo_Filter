@@ -1,9 +1,4 @@
-cat << 'EOF' > /root/cod_geolocation.sh
 #!/bin/sh
-# ==============================================================================
-# LIVE CLOUD-MAXMIND ENRICHMENT ENGINE - REPAIRED API PATHWAY Build
-# ==============================================================================
-
 MASTER_FILE="/root/COD_Master.txt"
 
 if [ ! -s "$MASTER_FILE" ]; then
@@ -19,11 +14,9 @@ echo "--------------------------------------------------------------------------
 while read -r line; do
     [ -z "$line" ] && continue
     
-    # Isolate the exact individual server IP and its tracker category status tag
     IP_ADDR=$(echo "$line" | awk '{print $1}')
     STATUS_TAG=$(echo "$line" | awk '{print $2}')
     
-    # Core STUN/Demonware auth bypass shortcut
     case "$IP_ADDR" in
         185.34.107.*)
             printf "📍 %-16s | %-12s | %-28s | %s\n" "$IP_ADDR" "$STATUS_TAG" "Santa Monica, California (US)" "Activision Master STUN [Demonware]"
@@ -31,15 +24,12 @@ while read -r line; do
             ;;
     esac
     
-    # FIXED: Corrected API endpoint pathway string syntax
     GEO_DATA=$(curl -s "https://freeipapi.com{IP_ADDR}" --max-time 3)
     
-    # Parse parameters cleanly using precise shell text extraction
     CITY=$(echo "$GEO_DATA" | grep -oE '"cityName":"[^"]+"' | cut -d'"' -f4)
     REGION=$(echo "$GEO_DATA" | grep -oE '"regionName":"[^"]+"' | cut -d'"' -f4)
     COUNTRY=$(echo "$GEO_DATA" | grep -oE '"countryCode":"[^"]+"' | cut -d'"' -f4)
     
-    # Query fallback organization utility
     PROVIDER=$(curl -s "https://ipapi.co{IP_ADDR}/org/" --max-time 3 | tr -d '\r\n')
     [ -z "$PROVIDER" ] || echo "$PROVIDER" | grep -q "Undefined" && PROVIDER="Unknown Gaming Infrastructure"
 
@@ -50,8 +40,6 @@ while read -r line; do
         printf "❌ %-16s | %-12s | %-28s | %s\n" "$IP_ADDR" "$STATUS_TAG" "Unknown Location Zone" "[Cloud Query Timeout]"
     fi
     
-    # Polite 1-second delay to strictly respect cloud rate restrictions
     sleep 1
 done < "$MASTER_FILE"
 echo "================================================================================"
-EOF
