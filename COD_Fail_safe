@@ -1,17 +1,20 @@
-cat << 'EOF' > /root/cod_failsafe.sh
 #!/bin/sh
 # ==============================================================================
-# SCRIPT 4: LATENCY ENGINE - TWO-TIER PORT RANGE ELEVATION CORE
+# SCRIPT 4: LATENCY ENGINE - DATA-GATED AUDITOR WITH POST-PENDING RANGE SCAN
 # ==============================================================================
 MASTER_FILE="/root/COD_Master.txt"
 DUMP_FILE="/root/COD_Dump.txt"
 US_ONLY_FILE="/root/COD_US_Only.txt"
+PRE_PEND_POOL="/root/COD_Pre_Pending.txt"
 LOW_LAT_POOL="/root/COD_Pending.txt"
 HIGH_LAT_POOL="/root/COD_Blocked.txt"
+UNPING_POOL="/root/COD_Unpingable.txt"
 OFFICIAL_POOL="/root/COD_Official_Allowed.txt"
 PROMOTER_SCRIPT="/root/cod_promoter.sh"
 
-touch "$MASTER_FILE" "$DUMP_FILE" "$US_ONLY_FILE" "$LOW_LAT_POOL" "$HIGH_LAT_POOL" "$OFFICIAL_POOL"
+MAX_LATENCY=70
+
+touch "$MASTER_FILE" "$DUMP_FILE" "$US_ONLY_FILE" "$PRE_PEND_POOL" "$LOW_LAT_POOL" "$HIGH_LAT_POOL" "$UNPING_POOL" "$OFFICIAL_POOL"
 
 # Native utility tool to verify if a port falls inside the 30000:45000 block
 port_in_range() {
@@ -55,10 +58,9 @@ while true; do
         sort -u "$US_ONLY_FILE" -o "$US_ONLY_FILE"
     fi
 
-    # --- PHASE 2: AUDIT US ONLY TRAFFIC FOR PORT CONDITIONS (BURIED TO PENDING OR ALLOWED) ---
+    # --- PHASE 2: AUDIT US ONLY TRAFFIC FOR PORT CONDITIONS ---
     if [ -s "$US_ONLY_FILE" ]; then
         conntrack -L -p udp 2>/dev/null | grep "ASSURED" | grep "192.168.1.15" | while read -r state_line; do
-            # Core parameter check: All target lanes must carry your unique Xbox port 49806
             echo "$state_line" | grep -q "port=49806" || continue
             
             TARGET_IP=$(echo "$state_line" | grep -oE 'dst=[0-9.]+' | awk -F= '{print $2}' | head -n1)
@@ -67,7 +69,7 @@ while true; do
             DPORT=$(echo "$state_line" | grep -oE 'dport=[0-9]+' | awk -F= '{print $2}' | head -n1)
             SPORT=$(echo "$state_line" | grep -oE 'sport=[0-9]+' | awk -F= '{print $2}' | head -n1)
             
-            # ROUTING CONDITION 1: Ports 3074 or 3544 go STRAIGHT to Allowed Whitelist
+            # CONDITION 1: Ports 3074 or 3544 go STRAIGHT to Allowed Whitelist
             if [ "$DPORT" = "3074" ] || [ "$DPORT" = "3544" ] || [ "$SPORT" = "3074" ] || [ "$SPORT" = "3544" ]; then
                 sed -i "\|^$TARGET_IP|d" "$US_ONLY_FILE" 2>/dev/null
                 SUBNET=$(echo "$TARGET_IP" | awk -F. '{print $1"."$2"."$3".0/24"}')
@@ -76,17 +78,35 @@ while true; do
                 continue
             fi
 
-            # ROUTING CONDITION 2: Block 30000:45000 drops into Pending folder to gather volume history
+            # CONDITION 2: Block 30000:45000 drops into PRE-PENDING folder first
             if port_in_range "$DPORT" || port_in_range "$SPORT"; then
                 sed -i "\|^$TARGET_IP|d" "$US_ONLY_FILE" 2>/dev/null
-                echo "$TARGET_IP" >> "$LOW_LAT_POOL"
-                echo "$TARGET_IP #Pending" >> "$MASTER_FILE"
+                echo "$TARGET_IP" >> "$PRE_PEND_POOL"
+                echo "$TARGET_IP #Pre-Pending" >> "$MASTER_FILE"
                 continue
             fi
         done
     fi
 
-    # --- PHASE 3: TELEMETRY LOAD AUDIT FOR PENDING POOL DATA (>10,000 BYTES) ---
+    # --- PHASE 3: AUDIT PRE-PENDING FOR 12 PACKETS OR 666 BYTES RULE ---
+    if [ -s "$PRE_PEND_POOL" ]; then
+        conntrack -L -p udp 2>/dev/null | grep "ASSURED" | while read -r state_line; do
+            PKT_COUNT=$(echo "$state_line" | grep -oE 'packets=[0-9]+' | awk -F= '{print $2}' | head -n1)
+            BYTE_COUNT=$(echo "$state_line" | grep -oE 'bytes=[0-9]+' | awk -F= '{print $2}' | head -n1)
+            
+            if [ "$PKT_COUNT" -eq 12 ] || [ "$BYTE_COUNT" -eq 666 ]; then
+                TARGET_IP=$(echo "$state_line" | grep -oE 'dst=[0-9.]+' | awk -F= '{print $2}' | head -n1)
+                if grep -q "^$TARGET_IP" "$PRE_PEND_POOL" 2>/dev/null; then
+                    sed -i "\|^$TARGET_IP|d" "$PRE_PEND_POOL" 2>/dev/null
+                    sed -i "\|^$TARGET_IP|d" "$MASTER_FILE" 2>/dev/null
+                    echo "$TARGET_IP" >> "$LOW_LAT_POOL"
+                    echo "$TARGET_IP #Pending" >> "$MASTER_FILE"
+                fi
+            fi
+        done
+    fi
+
+    # --- PHASE 4: TELEMETRY LOAD AUDIT + POST-PENDING /24 PROBING CORE ---
     if [ -s "$LOW_LAT_POOL" ]; then
         conntrack -L -p udp 2>/dev/null | grep "ASSURED" | while read -r state_line; do
             BYTE_COUNT=$(echo "$state_line" | grep -oE 'bytes=[0-9]+' | awk -F= '{print $2}' | head -n1)
@@ -94,18 +114,73 @@ while true; do
             
             PENDING_IP=$(echo "$state_line" | grep -oE 'dst=[0-9.]+' | awk -F= '{print $2}' | head -n1)
             if grep -q "^$PENDING_IP" "$LOW_LAT_POOL" 2>/dev/null; then
-                # Target range passed both port filtering and byte load benchmarks -> Trigger Promotion
-                if [ -x "$PROMOTER_SCRIPT" ]; then "$PROMOTER_SCRIPT" & fi
+                
+                # 🎯 INJECTION POINT: CRITICAL POST-PENDING ACTIVE RANGE SCAN
+                SUBNET_BASE=$(echo "$PENDING_IP" | cut -d. -f1-3)
+                WAN_IP=$(ip -4 route get 1.1.1.1 2>/dev/null | grep -oE 'src [0-9.]+' | awk '{print $2}')
+                [ -z "$WAN_IP" ] && WAN_IP="0.0.0.0"
+                
+                MIN_PING=999
+                RESPONSES_FOUND=0
+                
+                # Parallel asynchronous ping burst array (.1, .10, .25, .50)
+                for host_node in 1 10 25 50; do
+                    (
+                        test_ip="${SUBNET_BASE}.${host_node}"
+                        response=$(ping -4 -I "$WAN_IP" -c 1 -W 1 "$test_ip" 2>/dev/null | grep avg | awk -F/ '{print $5}' | cut -d. -f1)
+                        if [ -n "$response" ]; then
+                            echo "OK:$response"
+                        else
+                            echo "DEAD:0"
+                        fi
+                    ) &
+                done > /tmp/cod_failsafe_probe.txt
+                
+                sleep 0.4
+                wait
+                
+                # Evaluate results array for responsiveness and latency values
+                while read -r probe_line; do
+                    [ -z "$probe_line" ] && continue
+                    status=$(echo "$probe_line" | cut -d: -f1)
+                    p_time=$(echo "$probe_line" | cut -d: -f2)
+                    
+                    if [ "$status" = "OK" ]; then
+                        RESPONSES_FOUND=$((RESPONSES_FOUND + 1))
+                        if [ "$p_time" -lt "$MIN_PING" ]; then MIN_PING="$p_time"; fi
+                    fi
+                done < /tmp/cod_failsafe_probe.txt
+                rm -f /tmp/cod_failsafe_probe.txt
+
+                # STEP A: IF ALL ENDPOINTS ARE DEAD/SILENT -> ROUTE TO UNPINGABLE
+                if [ "$RESPONSES_FOUND" -eq 0 ]; then
+                    sed -i "\|^$PENDING_IP|d" "$LOW_LAT_POOL" 2>/dev/null
+                    sed -i "\|^$PENDING_IP|d" "$MASTER_FILE" 2>/dev/null
+                    echo "$PENDING_IP" >> "$UNPING_POOL"
+                    echo "$PENDING_IP #Unpingable" >> "$MASTER_FILE"
+                    continue
+                fi
+
+                # STEP B: EVALUATE REAL PHYSICAL LATENCY ACCURACY
+                if [ "$MIN_PING" -le "$MAX_LATENCY" ] && [ "$MIN_PING" -ne 999 ]; then
+                    # Passed telemetry, payload, and range-ping floor benchmarks -> Trigger Whitelist Promotion
+                    if [ -x "$PROMOTER_SCRIPT" ]; then "$PROMOTER_SCRIPT" & fi
+                else
+                    # Failed real distance rule check (Too far away from East Coast/Chicago parameters)
+                    sed -i "\|^$PENDING_IP|d" "$LOW_LAT_POOL" 2>/dev/null
+                    sed -i "\|^$PENDING_IP|d" "$MASTER_FILE" 2>/dev/null
+                    echo "$PENDING_IP" >> "$HIGH_LAT_POOL"
+                    echo "$PENDING_IP #Blocked" >> "$MASTER_FILE"
+                fi
             fi
         done
     fi
 
     sort -u "$MASTER_FILE" -o "$MASTER_FILE" 2>/dev/null
+    sort -u "$PRE_PEND_POOL" -o "$PRE_PEND_POOL" 2>/dev/null
     sort -u "$LOW_LAT_POOL" -o "$LOW_LAT_POOL" 2>/dev/null
     sort -u "$HIGH_LAT_POOL" -o "$HIGH_LAT_POOL" 2>/dev/null
+    sort -u "$UNPING_POOL" -o "$UNPING_POOL" 2>/dev/null
     sleep 5
 done
-EOF
-sed -i 's/\r//g' /root/cod_failsafe.sh && chmod 755 /root/cod_failsafe.sh
-
 
