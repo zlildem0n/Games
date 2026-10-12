@@ -1,5 +1,4 @@
 #!/bin/sh
-
 PASSED_POOL="/root/COD_Pending.txt"
 FAILSAFE_POOL="/root/COD_Failsafe_Recovered.txt"
 OFFICIAL_POOL="/root/COD_Official_Allowed.txt"
