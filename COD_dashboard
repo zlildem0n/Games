@@ -1,8 +1,13 @@
 cat << 'EOF' > /root/cod_scoreboard.sh
 #!/bin/sh
+# ==============================================================================
+# SCRIPT 5: VISUAL SCOREBOARD COCKPIT (REARRANGED PIPELINE BUILD)
+# ==============================================================================
+
 echo "--- ACTIVE GAME SCOREBOARD (5s Refresh) ---"
 echo "=============================================="
 
+# 1. PROCESS MONITOR: Verify background engines are online in system memory
 if ps w | grep -v grep | grep -q "cod_watcher.sh"; then
     STATUS_WATCHER="\033[0;32m[ ACTIVE ]\033[0m"
 else
@@ -18,13 +23,16 @@ fi
 printf "  Packet Watcher:     %b\n" "$STATUS_WATCHER"
 printf "  Latency Auditor:    %b\n" "$STATUS_AUDITOR"
 echo "----------------------------------------------"
-# RENAMED: Dashboard view updated from Dump Mailbox to US Only Staging
+
+# 2. SECTIONS MONITOR: Print tally tracking rows matching your actual data pathways
+echo "  Dump Mailbox:       $(wc -l < /root/COD_Dump.txt 2>/dev/null || echo 0)"
 echo "  US Only Staging:    $(wc -l < /root/COD_US_Only.txt 2>/dev/null || echo 0)"
+echo "  Pre-Pending (666):  $(wc -l < /root/COD_Pre_Pending.txt 2>/dev/null || echo 0)"
 echo "----------------------------------------------"
 echo "  Official Allowed:   $(wc -l < /root/COD_Official_Allowed.txt 2>/dev/null || echo 0)"
 echo "  Pending (Standard): $(grep -c '#Pending' /root/COD_Master.txt 2>/dev/null || echo 0)"
 echo "  Blocked:            $(grep -c '#Blocked' /root/COD_Master.txt 2>/dev/null || echo 0)"
-echo "  Unpingable:         $(grep -c '#Unpingable' /root/COD_Master.txt 2>/dev/null || echo 0)"
+echo "  Unpingable Pool:    $(grep -c '#Unpingable' /root/COD_Master.txt 2>/dev/null || echo 0)"
 echo "----------------------------------------------"
 echo "  Total Logs:         $(wc -l < /root/COD_Master.txt 2>/dev/null || echo 0)"
 echo "=============================================="
