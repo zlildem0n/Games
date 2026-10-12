@@ -1,7 +1,7 @@
 cat << 'EOF' > /root/cod_failsafe.sh
 #!/bin/sh
 # ==============================================================================
-# SCRIPT 4: LATENCY ENGINE - TRIPLE-API GEO-GUARD BUILD (MAXMIND LOCAL FALLBACK)
+# SCRIPT 4: LATENCY ENGINE - 2/3 QUORUM GEOGRAPHIC CONSENSUS AUDITOR
 # ==============================================================================
 MAX_LATENCY=70
 MASTER_FILE="/root/COD_Master.txt"
@@ -55,52 +55,43 @@ while true; do
             fi
         done < "$OFFICIAL_POOL"
 
-        # STEP 2: TRIPLE-GATED CLOUD & NATIVE LOCATION LOOKUPS
+        # STEP 2: 2/3 QUORUM CONSENSUS VOTING ARRAY
         if [ "$IS_EAST_COAST" -eq 0 ]; then
-            # Gate A: Primary Cloud MaxMind Check
-            GEO_DATA=$(curl -s "https://freeipapi.com{SERVER_IP}" --max-time 3)
-            REGION_CODE=$(echo "$GEO_DATA" | grep -oE '"regionCode":"[^"]+"' | cut -d'"' -f4)
-            COUNTRY_CODE=$(echo "$GEO_DATA" | grep -oE '"countryCode":"[^"]+"' | cut -d'"' -f4)
+            VOTES_PASSED=0
 
-            # Gate B: Secondary Cloud Failover Check (ipinfo.io)
-            if [ -z "$REGION_CODE" ] || [ -z "$COUNTRY_CODE" ]; then
-                IPINFO_DATA=$(curl -s "https://ipinfo.io{SERVER_IP}/json" --max-time 3)
-                REGION_NAME=$(echo "$IPINFO_DATA" | grep -oE '"region": "[^"]+"' | cut -d'"' -f4)
-                COUNTRY_CODE=$(echo "$IPINFO_DATA" | grep -oE '"country": "[^"]+"' | cut -d'"' -f4)
-                
-                case "$REGION_NAME" in
-                    Illinois)       REGION_CODE="IL" ;;
-                    "New York")     REGION_CODE="NY" ;;
-                    Virginia)       REGION_CODE="VA" ;;
-                    Georgia)        REGION_CODE="GA" ;;
-                    Florida)        REGION_CODE="FL" ;;
-                    "New Jersey")   REGION_CODE="NJ" ;;
-                    Pennsylvania)   REGION_CODE="PA" ;;
-                    Massachusetts)  REGION_CODE="MA" ;;
-                    Maryland)       REGION_CODE="MD" ;;
-                    "North Carolina") REGION_CODE="NC" ;;
-                    *)              REGION_CODE="UNKNOWN" ;;
+            # --- Vote A: Primary Cloud MaxMind Check (freeipapi.com) ---
+            GEO_DATA=$(curl -s "https://freeipapi.com{SERVER_IP}" --max-time 3)
+            REG_A=$(echo "$GEO_DATA" | grep -oE '"regionCode":"[^"]+"' | cut -d'"' -f4)
+            CC_A=$(echo "$GEO_DATA" | grep -oE '"countryCode":"[^"]+"' | cut -d'"' -f4)
+            if [ "$CC_A" = "US" ]; then
+                case "$REG_A" in
+                    IL|NY|VA|GA|FL|NJ|PA|MA|MD|NC) VOTES_PASSED=$((VOTES_PASSED + 1)) ;;
                 esac
             fi
 
-            # Gate C: Native Local MaxMind Offline Emergency Fallback
-            if [ -z "$REGION_CODE" ] || [ -z "$REGION_CODE" -o "$REGION_CODE" = "UNKNOWN" ]; then
-                if command -v geoiplookup >/dev/null 2>&1; then
-                    LOCAL_GEO=$(geoiplookup "$SERVER_IP" 2>/dev/null)
-                    COUNTRY_CODE=$(echo "$LOCAL_GEO" | grep -oE 'GeoIP Country Edition: [A-Z]{2}' | awk '{print $4}')
-                    
-                    # Native local verification scan for explicit East Coast state strings
-                    if echo "$LOCAL_GEO" | grep -qE "Illinois|New York|Virginia|Georgia|Florida|New Jersey|Pennsylvania|Massachusetts|Maryland|North Carolina"; then
-                        REGION_CODE="MATCHED_LOCAL"
-                    fi
+            # --- Vote B: Secondary Cloud Check (ipinfo.io) ---
+            IPINFO_DATA=$(curl -s "https://ipinfo.io{SERVER_IP}/json" --max-time 3)
+            REG_B=$(echo "$IPINFO_DATA" | grep -oE '"region": "[^"]+"' | cut -d'"' -f4)
+            CC_B=$(echo "$IPINFO_DATA" | grep -oE '"country": "[^"]+"' | cut -d'"' -f4)
+            if [ "$CC_B" = "US" ]; then
+                case "$REG_B" in
+                    Illinois|"New York"|Virginia|Georgia|Florida|"New Jersey"|Pennsylvania|Massachusetts|Maryland|"North Carolina")
+                        VOTES_PASSED=$((VOTES_PASSED + 1))
+                        ;;
+                esac
+            fi
+
+            # --- Vote C: Native Local MaxMind Offline Check ---
+            if command -v geoiplookup >/dev/null 2>&1; then
+                LOCAL_GEO=$(geoiplookup "$SERVER_IP" 2>/dev/null)
+                if echo "$LOCAL_GEO" | grep -qE "Illinois|New York|Virginia|Georgia|Florida|New Jersey|Pennsylvania|Massachusetts|Maryland|North Carolina"; then
+                    VOTES_PASSED=$((VOTES_PASSED + 1))
                 fi
             fi
 
-            # Evaluate cumulative geographic match rules
-            if [ "$COUNTRY_CODE" = "US" ] || [ "$REGION_CODE" = "MATCHED_LOCAL" ]; then
-                case "$REGION_CODE" in
-                    IL|NY|VA|GA|FL|NJ|PA|MA|MD|NC|MATCHED_LOCAL) IS_EAST_COAST=1 ;;
-                esac
+            # Consensus Validation: Minimum 2 out of 3 engines must whitelist the location
+            if [ "$VOTES_PASSED" -ge 2 ]; then
+                IS_EAST_COAST=1
             fi
         fi
 
@@ -126,6 +117,8 @@ while true; do
                 echo "$SERVER_IP #Blocked" >> "$MASTER_FILE"
             fi
         else
+            # Consensus Failed (Less than 2 registries matched East Coast/Chicago)
+            echo "   [!] Server $SERVER_IP failed consensus consensus ($VOTES_PASSED/3 matching registries). Blocking..."
             echo "$SERVER_IP" >> "$HIGH_LAT_POOL"
             echo "$SERVER_IP #Blocked" >> "$MASTER_FILE"
         fi
@@ -138,4 +131,5 @@ while true; do
 done
 EOF
 chmod 755 /root/cod_failsafe.sh
+
 
