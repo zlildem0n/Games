@@ -1,7 +1,8 @@
 cat << 'EOF' > /root/cod_watcher.sh
 #!/bin/sh
 XBOX_PORT="49806"
-DUMP_FILE="/root/COD_Dump.txt"
+# RENAMED: Shifted target file destination from COD_Dump to COD_US_Only
+DUMP_FILE="/root/COD_US_Only.txt"
 VERIFY_SCRIPT="/root/cod_verify.sh"
 MASTER_FILE="/root/COD_Master.txt"
 OFFICIAL_POOL="/root/COD_Official_Allowed.txt"
@@ -28,30 +29,16 @@ tcpdump -i eth4 -n -l "udp port $XBOX_PORT or port 3074 or port 3544" 2>/dev/nul
     [ -z "$SERVER_IP" ] && continue
     
     if echo "$tripwire_packet" | grep -qE "\.3074|\.3544"; then
-        IS_US=0
+        VOTES_PASSED=0
         
-        # FIXED: Using mmdblookup to query the native UniFi database format safely
-        if command -v mmdblookup >/dev/null 2>&1; then
-            LOCAL_CC=$(mmdblookup --ip "$SERVER_IP" --id country iso_code 2>/dev/null | grep -oE '"[A-Z]{2}"' | tr -d '"')
-            [ "$LOCAL_CC" = "US" ] && IS_US=1
-        elif command -v geoiplookup >/dev/null 2>&1; then
-            LOCAL_CC=$(geoiplookup "$SERVER_IP" 2>/dev/null | grep -oE 'GeoIP Country Edition: [A-Z]{2}' | awk '{print $4}')
-            [ "$LOCAL_CC" = "US" ] && IS_US=1
-        fi
-
-        if [ "$IS_US" -eq 0 ]; then
-            CLOUD_VOTES=0
-            GEO_DATA=$(curl -s "https://freeipapi.com{SERVER_IP}" --max-time 2)
-            [ "$(echo "$GEO_DATA" | grep -oE '"countryCode":"[^"]+"' | cut -d'"' -f4)" = "US" ] && CLOUD_VOTES=$((CLOUD_VOTES + 1))
-            
-            IPINFO_DATA=$(curl -s "https://ipinfo.io{SERVER_IP}/json" --max-time 2)
-            [ "$(echo "$IPINFO_DATA" | grep -oE '"country": "[^"]+"' | cut -d'"' -f4)" = "US" ] && CLOUD_VOTES=$((CLOUD_VOTES + 1))
-
-            [ "$CLOUD_VOTES" -eq 2 ] && IS_US=1
-        fi
+        GEO_DATA=$(curl -s "https://freeipapi.com{SERVER_IP}" --max-time 2)
+        [ "$(echo "$GEO_DATA" | grep -oE '"countryCode":"[^"]+"' | cut -d'"' -f4)" = "US" ] && VOTES_PASSED=$((VOTES_PASSED + 1))
+        
+        IPINFO_DATA=$(curl -s "https://ipinfo.io{SERVER_IP}/json" --max-time 2)
+        [ "$(echo "$IPINFO_DATA" | grep -oE '"country": "[^"]+"' | cut -d'"' -f4)" = "US" ] && VOTES_PASSED=$((VOTES_PASSED + 1))
 
         SUBNET=$(echo "$SERVER_IP" | awk -F. '{print $1"."$2"."$3".0/24"}')
-        if [ "$IS_US" -eq 1 ]; then
+        if [ "$VOTES_PASSED" -ge 2 ]; then
             if ! grep -q "^$SUBNET" "$OFFICIAL_POOL" 2>/dev/null; then
                 echo "$SUBNET" >> "$OFFICIAL_POOL"
                 sed -i "\|^$SERVER_IP|d" "$MASTER_FILE" 2>/dev/null
@@ -76,3 +63,5 @@ tcpdump -i eth4 -n -l "udp port $XBOX_PORT or port 3074 or port 3544" 2>/dev/nul
     fi
 done
 EOF
+sed -i 's/\r//g' /root/cod_watcher.sh && chmod 755 /root/cod_watcher.sh
+
