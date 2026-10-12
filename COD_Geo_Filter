@@ -1,4 +1,3 @@
-cat << 'EOF' > /root/cod_geofilter.sh
 #!/bin/sh
 # ==============================================================================
 # SCRIPT 5: REAL-TIME MAXMIND GEOLOCATE INSPECTOR (PRODUCTION FIXED)
@@ -47,5 +46,3 @@ while read -r line; do
     sleep 1
 done < "$MASTER_FILE"
 echo "================================================================================"
-EOF
-chmod 755 /root/cod_geofilter.sh
