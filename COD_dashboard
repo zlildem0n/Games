@@ -1,14 +1,13 @@
 cat << 'EOF' > /root/cod_scoreboard.sh
 #!/bin/sh
 # ==============================================================================
-# SCRIPT 5: VISUAL SCOREBOARD COCKPIT - STABILIZED PRODUCTION BUILD
+# SCRIPT 5: VISUAL SCOREBOARD COCKPIT - PRODUCTION STABILIZED
 # ==============================================================================
 
 clear
 echo "--- ACTIVE GAME SCOREBOARD (5s Refresh) ---"
 echo "=============================================="
 
-# 1. PROCESS MONITOR: Verify background engines are online in system memory
 if ps w | grep -v grep | grep -q "cod_watcher.sh"; then
     STATUS_WATCHER="[ ACTIVE ]"
 else
@@ -25,7 +24,6 @@ printf "  Packet Watcher:     %s\n" "$STATUS_WATCHER"
 printf "  Latency Auditor:    %s\n" "$STATUS_AUDITOR"
 echo "----------------------------------------------"
 
-# 2. SECTIONS MONITOR: Print tally tracking rows matching your actual data pathways
 echo "  Dump Mailbox:       $(wc -l < /root/COD_Dump.txt 2>/dev/null || echo 0)"
 echo "  US Only Staging:    $(wc -l < /root/COD_US_Only.txt 2>/dev/null || echo 0)"
 echo "  Pre-Pending (666):  $(wc -l < /root/COD_Pre_Pending.txt 2>/dev/null || echo 0)"
@@ -38,6 +36,4 @@ echo "----------------------------------------------"
 echo "  Total Logs:         $(wc -l < /root/COD_Master.txt 2>/dev/null || echo 0)"
 echo "=============================================="
 EOF
-sed -i 's/\r//g' /root/cod_scoreboard.sh && chmod 755 /root/cod_scoreboard.sh
-sync
-echo "[*] Local scoreboard file successfully stabilized!"
+chmod 755 /root/cod_scoreboard.sh
