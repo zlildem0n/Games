@@ -1,14 +1,26 @@
+cat << 'EOF' > /root/cod_failsafe.sh
 #!/bin/sh
 # ==============================================================================
-# SCRIPT 4: OPTIMIZED DUAL-VALIDATION ENGINE (FIXED API PATH AND DOLLAR NOTATION)
+# SCRIPT 4: LATENCY ENGINE - TRIPLE-API GEO-GUARD BUILD (MAXMIND LOCAL FALLBACK)
 # ==============================================================================
 MAX_LATENCY=70
 MASTER_FILE="/root/COD_Master.txt"
 LOW_LAT_POOL="/root/COD_Pending.txt"
 HIGH_LAT_POOL="/root/COD_Blocked.txt"
+OFFICIAL_POOL="/root/COD_Official_Allowed.txt"
 PROMOTER_SCRIPT="/root/cod_promoter.sh"
 
-touch "$MASTER_FILE" "$LOW_LAT_POOL" "$HIGH_LAT_POOL"
+touch "$MASTER_FILE" "$LOW_LAT_POOL" "$HIGH_LAT_POOL" "$OFFICIAL_POOL"
+
+# Native subnet lookup utility function
+ip_in_subnet() {
+    local ip=$1
+    local subnet=$2
+    local base_subnet=$(echo "$subnet" | cut -d/ -f1 | cut -d. -f1-3)
+    local base_ip=$(echo "$ip" | cut -d. -f1-3)
+    [ "$base_subnet" = "$base_ip" ] && return 0
+    return 1
+}
 
 while true; do
     conntrack -L -p udp 2>/dev/null | grep "ASSURED" | grep "192.168.1.15" | grep "port=49806" | while read -r state_line; do
@@ -19,6 +31,7 @@ while true; do
         [ -z "$SERVER_IP" ] && continue
         echo "$SERVER_IP" | grep -qE "^(192\.168|127\.)" && continue
         
+        # STUN & TEREDO MASTER EXCEPTION GATE: Force-whitelist core infrastructure nodes
         case "$SERVER_IP" in
             185.34.107.*|65.54.227.120|24.229.189.181)
                 if ! grep -q "$SERVER_IP" "$MASTER_FILE" 2>/dev/null; then
@@ -32,18 +45,66 @@ while true; do
 
         grep -q "$SERVER_IP" "$MASTER_FILE" && continue
 
-        # FIXED: Corrected path slicing variables and slash configurations
-        GEO_DATA=$(curl -s "https://freeipapi.com{SERVER_IP}" --max-time 3)
-        REGION_CODE=$(echo "$GEO_DATA" | grep -oE '"regionCode":"[^"]+"' | cut -d'"' -f4)
-        COUNTRY_CODE=$(echo "$GEO_DATA" | grep -oE '"countryCode":"[^"]+"' | cut -d'"' -f4)
-
+        # STEP 1: PRE-COMPILED WHITELIST BYPASS GATE
         IS_EAST_COAST=0
-        if [ "$COUNTRY_CODE" = "US" ]; then
-            case "$REGION_CODE" in
-                IL|NY|VA|GA|FL|NJ|PA|MA|MD|NC) IS_EAST_COAST=1 ;;
-            esac
+        while read -r subnet; do
+            [ -z "$subnet" ] && continue
+            if ip_in_subnet "$SERVER_IP" "$subnet"; then
+                IS_EAST_COAST=1
+                break
+            fi
+        done < "$OFFICIAL_POOL"
+
+        # STEP 2: TRIPLE-GATED CLOUD & NATIVE LOCATION LOOKUPS
+        if [ "$IS_EAST_COAST" -eq 0 ]; then
+            # Gate A: Primary Cloud MaxMind Check
+            GEO_DATA=$(curl -s "https://freeipapi.com{SERVER_IP}" --max-time 3)
+            REGION_CODE=$(echo "$GEO_DATA" | grep -oE '"regionCode":"[^"]+"' | cut -d'"' -f4)
+            COUNTRY_CODE=$(echo "$GEO_DATA" | grep -oE '"countryCode":"[^"]+"' | cut -d'"' -f4)
+
+            # Gate B: Secondary Cloud Failover Check (ipinfo.io)
+            if [ -z "$REGION_CODE" ] || [ -z "$COUNTRY_CODE" ]; then
+                IPINFO_DATA=$(curl -s "https://ipinfo.io{SERVER_IP}/json" --max-time 3)
+                REGION_NAME=$(echo "$IPINFO_DATA" | grep -oE '"region": "[^"]+"' | cut -d'"' -f4)
+                COUNTRY_CODE=$(echo "$IPINFO_DATA" | grep -oE '"country": "[^"]+"' | cut -d'"' -f4)
+                
+                case "$REGION_NAME" in
+                    Illinois)       REGION_CODE="IL" ;;
+                    "New York")     REGION_CODE="NY" ;;
+                    Virginia)       REGION_CODE="VA" ;;
+                    Georgia)        REGION_CODE="GA" ;;
+                    Florida)        REGION_CODE="FL" ;;
+                    "New Jersey")   REGION_CODE="NJ" ;;
+                    Pennsylvania)   REGION_CODE="PA" ;;
+                    Massachusetts)  REGION_CODE="MA" ;;
+                    Maryland)       REGION_CODE="MD" ;;
+                    "North Carolina") REGION_CODE="NC" ;;
+                    *)              REGION_CODE="UNKNOWN" ;;
+                esac
+            fi
+
+            # Gate C: Native Local MaxMind Offline Emergency Fallback
+            if [ -z "$REGION_CODE" ] || [ -z "$REGION_CODE" -o "$REGION_CODE" = "UNKNOWN" ]; then
+                if command -v geoiplookup >/dev/null 2>&1; then
+                    LOCAL_GEO=$(geoiplookup "$SERVER_IP" 2>/dev/null)
+                    COUNTRY_CODE=$(echo "$LOCAL_GEO" | grep -oE 'GeoIP Country Edition: [A-Z]{2}' | awk '{print $4}')
+                    
+                    # Native local verification scan for explicit East Coast state strings
+                    if echo "$LOCAL_GEO" | grep -qE "Illinois|New York|Virginia|Georgia|Florida|New Jersey|Pennsylvania|Massachusetts|Maryland|North Carolina"; then
+                        REGION_CODE="MATCHED_LOCAL"
+                    fi
+                fi
+            fi
+
+            # Evaluate cumulative geographic match rules
+            if [ "$COUNTRY_CODE" = "US" ] || [ "$REGION_CODE" = "MATCHED_LOCAL" ]; then
+                case "$REGION_CODE" in
+                    IL|NY|VA|GA|FL|NJ|PA|MA|MD|NC|MATCHED_LOCAL) IS_EAST_COAST=1 ;;
+                esac
+            fi
         fi
 
+        # STEP 3: LATENCY ENFORCEMENT LOOP
         if [ "$IS_EAST_COAST" -eq 1 ]; then
             WAN_IP=$(ip -4 route get 1.1.1.1 2>/dev/null | grep -oE 'src [0-9.]+' | awk '{print $2}')
             [ -z "$WAN_IP" ] && WAN_IP="0.0.0.0"
@@ -75,3 +136,6 @@ while true; do
     sort -u "$HIGH_LAT_POOL" -o "$HIGH_LAT_POOL" 2>/dev/null
     sleep 5
 done
+EOF
+chmod 755 /root/cod_failsafe.sh
+
