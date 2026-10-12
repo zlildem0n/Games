@@ -30,11 +30,13 @@ echo "  US Only Staging:    $(wc -l < /root/COD_US_Only.txt 2>/dev/null || echo 
 echo "  Pre-Pending (666):  $(wc -l < /root/COD_Pre_Pending.txt 2>/dev/null || echo 0)"
 echo "----------------------------------------------"
 echo "  Official Allowed:   $(wc -l < /root/COD_Official_Allowed.txt 2>/dev/null || echo 0)"
-echo "  Pending (Standard): $(grep -c '#Pending' /root/COD_Master.txt 2>/dev/null || echo 0)"
+echo "  Pending (Standard): $(wc -l < /root/COD_Pending.txt 2>/dev/null || echo 0)"
 echo "  Blocked:            $(grep -c '#Blocked' /root/COD_Master.txt 2>/dev/null || echo 0)"
-echo "  Unpingable Pool:    $(grep -c '#Unpingable' /root/COD_Master.txt 2>/dev/null || echo 0)"
+echo "  Unpingable Pool:    $(wc -l < /root/COD_Unpingable.txt 2>/dev/null || echo 0)"
 echo "----------------------------------------------"
 echo "  Total Logs:         $(wc -l < /root/COD_Master.txt 2>/dev/null || echo 0)"
 echo "=============================================="
 EOF
 chmod 755 /root/cod_scoreboard.sh
+sync
+echo "[*] Local scoreboard file successfully updated with new pipeline folders!"
