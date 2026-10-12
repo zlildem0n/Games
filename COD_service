@@ -1,0 +1,17 @@
+[Unit]
+Description=Call of Duty Matchmaking Logistics Engine
+After=network.target network-online.target unifi.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/root
+ExecStart=/root/cod_failsafe.sh
+Restart=always
+RestartSec=5
+StandardOutput=append:/var/log/cod_engine_system.log
+StandardError=append:/var/log/cod_engine_system.log
+
+[Install]
+WantedBy=multi-user.target
