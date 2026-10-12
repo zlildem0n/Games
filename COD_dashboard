@@ -3,7 +3,7 @@
 # SCRIPT 8: CENTRALIZED MONITORING COMMAND CONSOLE DASHBOARD
 # ==============================================================================
 
-# Define absolute file matrix targets
+# Define absolute file matrix targets matching your storage exactly
 DUMP="/root/COD_Dump.txt"
 PRE_PENDING="/root/COD_Pre_Pending.txt"
 PENDING="/root/COD_Pending.txt"
@@ -20,8 +20,7 @@ while true; do
     # Jump back to the top-left terminal coordinates to avoid scrolling lag
     printf "\033[H"
     
-    # Calculate unique row lines inside each tracking file container
-    # Handles missing file checks safely by outputting 0 if empty
+    # Calculate unique row lines inside each tracking file container safely
     cnt_dump=$(wc -l "$DUMP" 2>/dev/null | awk '{print $1}')
     cnt_pre=$(wc -l "$PRE_PENDING" 2>/dev/null | awk '{print $1}')
     cnt_pend=$(wc -l "$PENDING" 2>/dev/null | awk '{print $1}')
