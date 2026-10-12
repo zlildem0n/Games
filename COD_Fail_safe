@@ -1,181 +1,95 @@
 #!/bin/sh
 # ==============================================================================
-# SCRIPT 4: LATENCY ENGINE - PRE-PENDING TO PENDING WITH FIXED AWK STREAM PARSING
+# SCRIPT 7: PARALLEL SUBNET SWEEPER & LATENCY FILTER (70MS MAX / UNPINGABLE SPLIT)
 # ==============================================================================
-MASTER_FILE="/root/COD_Master.txt"
-DUMP_FILE="/root/COD_Dump.txt"
-US_ONLY_FILE="/root/COD_US_Only.txt"
-PRE_PEND_POOL="/root/COD_Pre_Pending.txt"
-LOW_LAT_POOL="/root/COD_Pending.txt"
-HIGH_LAT_POOL="/root/COD_Blocked.txt"
-UNPING_POOL="/root/COD_Unpingable.txt"
-OFFICIAL_POOL="/root/COD_Official_Allowed.txt"
-PROMOTER_SCRIPT="/root/cod_promoter.sh"
+PENDING_FILE="/root/COD_Pending.txt"
+POST_PENDING_FILE="/root/COD_Post_Pending.txt"
+UNPINGABLE_FILE="/root/COD_Unpingable.txt"
+LATENCY_LIMIT=70
 
-MAX_LATENCY=70
+if [ ! -f "$PENDING_FILE" ]; then
+    touch "$PENDING_FILE" && chmod 666 "$PENDING_FILE"
+fi
+touch "$POST_PENDING_FILE" "$UNPINGABLE_FILE" && chmod 666 "$POST_PENDING_FILE" "$UNPINGABLE_FILE"
 
-touch "$MASTER_FILE" "$DUMP_FILE" "$US_ONLY_FILE" "$PRE_PEND_POOL" "$LOW_LAT_POOL" "$HIGH_LAT_POOL" "$UNPING_POOL" "$OFFICIAL_POOL"
+echo "--- LIVE PARALLEL ICMP SUBNET SWEEPER ENGINE ---"
+echo "[*] Monitoring $PENDING_FILE for new /24 subnets..."
+echo "================================================================================"
+printf "%-18s | %-12s | %s\n" "/24 TARGET SUBNET" "BEST LATENCY" "VALIDATION STATUS"
+echo "--------------------------------------------------------------------------------"
 
-# Native utility tool to verify if a port falls inside the 30000:50000 block
-port_in_range() {
-    local chk_port=$1
-    if [ "$chk_port" -ge 30000 ] && [ "$chk_port" -le 50000 ]; then return 0; fi
-    return 1
-}
+# Stream newly promoted /24 subnets in real time
+tail -n 0 -f "$PENDING_FILE" | while read -r line; do
+    [ -z "$line" ] && continue
 
-while true; do
-    # --- PHASE 1: PROCESS DUMP MAILBOX THROUGH 2/3 US COUNTRY QUORUM ---
-    if [ -s "$DUMP_FILE" ]; then
-        _queue="/tmp/cod_failsafe_queue.txt"
-        mv "$DUMP_FILE" "$_queue" && touch "$DUMP_FILE"
+    SUBNET_24=$(echo "$line" | awk '{print $1}')
+    
+    # Strip the trailing '.0/24' to get the network prefix (e.g., 185.34.107)
+    NET_PREFIX=$(echo "$SUBNET_24" | sed 's/\.0\/24$//')
+    
+    # Verify the prefix is syntactically valid before dropping into the sweep loop
+    [ -z "$NET_PREFIX" ] && continue
+
+    # Create a temporary secure directory inside ramfs/tmp to hold parallel worker outputs
+    TMP_DIR="/tmp/ping_sweep_$$"
+    mkdir -p "$TMP_DIR"
+
+    # Stage a high-speed parallel sweep of all 254 host addresses (.1 to .254)
+    host_idx=1
+    while [ "$host_idx" -le 254 ]; do
+        TARGET_IP="${NET_PREFIX}.${host_idx}"
         
-        while read -r SERVER_IP; do
-            [ -z "$SERVER_IP" ] && continue
-            grep -q "$SERVER_IP" "$MASTER_FILE" && continue
+        (
+            # Send 1 aggressive ICMP packet with a strict 200ms timeout window
+            PING_RES=$(ping -c 1 -W 1 -t 1 "$TARGET_IP" 2>/dev/null | grep 'time=' | awk -F'time=' '{print $2}' | awk '{print $1}' | cut -d. -f1)
             
-            VOTES_PASSED=0
-            GEO_DATA=$(curl -s "https://freeipapi.com{SERVER_IP}" --max-time 2)
-            [ "$(echo "$GEO_DATA" | grep -oE '"countryCode":"[^"]+"' | cut -d'"' -f4)" = "US" ] && VOTES_PASSED=$((VOTES_PASSED + 1))
-            
-            IPINFO_DATA=$(curl -s "https://ipinfo.io{SERVER_IP}/json" --max-time 2)
-            [ "$(echo "$IPINFO_DATA" | grep -oE '"country": "[^"]+"' | cut -d'"' -f4)" = "US" ] && VOTES_PASSED=$((VOTES_PASSED + 1))
-
-            if [ "$VOTES_PASSED" -lt 2 ]; then
-                if command -v mmdblookup >/dev/null 2>&1; then
-                    LOCAL_CC=$(mmdblookup --ip "$SERVER_IP" --id country iso_code 2>/dev/null | grep -oE '"[A-Z]{2}"' | tr -d '"')
-                    [ "$LOCAL_CC" = "US" ] && VOTES_PASSED=$((VOTES_PASSED + 1))
-                fi
+            if [ -n "$PING_RES" ]; then
+                echo "$PING_RES" > "${TMP_DIR}/${host_idx}.rt"
             fi
+        ) &
+        
+        host_idx=$((host_idx + 1))
+    done
 
-            if [ "$VOTES_PASSED" -ge 2 ]; then
-                echo "$SERVER_IP" >> "$US_ONLY_FILE"
-            else
-                echo "$SERVER_IP" >> "$HIGH_LAT_POOL"
-                echo "$SERVER_IP #Blocked" >> "$MASTER_FILE"
+    # Block script execution until all background workers finish their sweeps
+    wait
+
+    # Parse through the collected worker files to discover the lowest response metric
+    BEST_MS=""
+    TOTAL_RESPONSES=0
+    for res_file in "$TMP_DIR"/*.rt; do
+        if [ -f "$res_file" ]; then
+            val=$(cat "$res_file")
+            TOTAL_RESPONSES=$((TOTAL_RESPONSES + 1))
+            if [ -z "$BEST_MS" ] || [ "$val" -lt "$BEST_MS" ]; then
+                BEST_MS="$val"
             fi
-        done < "$_queue"
-        rm -f "$_queue"
-        sort -u "$US_ONLY_FILE" -o "$US_ONLY_FILE"
+        fi
+    done
+
+    # Safely clear the memory-backed worker files
+    rm -rf "$TMP_DIR"
+
+    # ROUTING CRITERIA Evaluation
+    if [ "$TOTAL_RESPONSES" -eq 0 ]; then
+        # PATH A: The entire subnet is completely unpingable (0 host responses recorded)
+        if ! grep -q "^$SUBNET_24" "$UNPINGABLE_FILE" 2>/dev/null; then
+            echo "$SUBNET_24" >> "$UNPINGABLE_FILE"
+        fi
+        printf "⚠️  %-18s | %-12s | \033[0;33mLOGGED TO UNPINGABLE.TXT\033[0m\n" \
+            "$SUBNET_24" "TIMEOUT"
+
+    elif [ -n "$BEST_MS" ] && [ "$BEST_MS" -lt "$LATENCY_LIMIT" ]; then
+        # PATH B: At least one host is responsive and under your 70ms ceiling
+        if ! grep -q "^$SUBNET_24" "$POST_PENDING_FILE" 2>/dev/null; then
+            echo "$SUBNET_24" >> "$POST_PENDING_FILE"
+        fi
+        printf "🟢 %-18s | \033[0;32m%3sms\033[0m       | PASSED ROUTING FILTER\n" \
+            "$SUBNET_24" "$BEST_MS"
+
+    else
+        # PATH C: Active hosts were found, but their ping time is too high (>70ms)
+        printf "❌ %-18s | %-12s | FAILED LATENCY GATE (>%sms)\n" \
+            "$SUBNET_24" "${BEST_MS}ms" "$LATENCY_LIMIT"
     fi
-
-    # --- PHASE 2: AUDIT US ONLY TRAFFIC FOR PORT CONDITIONS ---
-    if [ -s "$US_ONLY_FILE" ]; then
-        conntrack -L -p udp 2>/dev/null | grep "ASSURED" | grep "192.168.1.15" | while read -r state_line; do
-            echo "$state_line" | grep -q "port=49806" || continue
-            
-            TARGET_IP=$(echo "$state_line" | grep -oE 'dst=[0-9.]+' | awk -F= '{print $2}' | head -n1)
-            grep -q "^$TARGET_IP" "$US_ONLY_FILE" || continue
-
-            DPORT=$(echo "$state_line" | grep -oE 'dport=[0-9]+' | awk -F= '{print $2}' | head -n1)
-            SPORT=$(echo "$state_line" | grep -oE 'sport=[0-9]+' | awk -F= '{print $2}' | head -n1)
-            
-            # CONDITION 1: Ports 3074 or 3544 go STRAIGHT to Allowed Whitelist
-            if [ "$DPORT" = "3074" ] || [ "$DPORT" = "3544" ] || [ "$SPORT" = "3074" ] || [ "$SPORT" = "3544" ]; then
-                sed -i "\|^$TARGET_IP|d" "$US_ONLY_FILE" 2>/dev/null
-                SUBNET=$(echo "$TARGET_IP" | awk -F. '{print $1"."$2"."$3".0/24"}')
-                echo "$SUBNET" >> "$OFFICIAL_POOL"
-                echo "$SUBNET #Official_Allowed" >> "$MASTER_FILE"
-                continue
-            fi
-
-            # CONDITION 2: Block 30000:50000 drops into PRE-PENDING folder first
-            if port_in_range "$DPORT" || port_in_range "$SPORT"; then
-                sed -i "\|^$TARGET_IP|d" "$US_ONLY_FILE" 2>/dev/null
-                echo "$TARGET_IP" >> "$PRE_PEND_POOL"
-                echo "$TARGET_IP #Pre-Pending" >> "$MASTER_FILE"
-                continue
-            fi
-        done
-    fi
-
-    # --- PHASE 3: AUDIT PRE-PENDING FOR 12 PACKETS OR 666 BYTES RULE ---
-    if [ -s "$PRE_PEND_POOL" ]; then
-        conntrack -L -p udp 2>/dev/null | grep "ASSURED" | while read -r state_line; do
-            PKT_COUNT=$(echo "$state_line" | grep -oE 'packets=[0-9]+' | awk -F= '{print $2}' | head -n1)
-            BYTE_COUNT=$(echo "$state_line" | grep -oE 'bytes=[0-9]+' | awk -F= '{print $2}' | head -n1)
-            
-            if [ "$PKT_COUNT" -eq 12 ] || [ "$BYTE_COUNT" -eq 666 ]; then
-                TARGET_IP=$(echo "$state_line" | grep -oE 'dst=[0-9.]+' | awk -F= '{print $2}' | head -n1)
-                if grep -q "^$TARGET_IP" "$PRE_PEND_POOL" 2>/dev/null; then
-                    sed -i "\|^$TARGET_IP|d" "$PRE_PEND_POOL" 2>/dev/null
-                    sed -i "\|^$TARGET_IP|d" "$MASTER_FILE" 2>/dev/null
-                    echo "$TARGET_IP" >> "$LOW_LAT_POOL"
-                    echo "$TARGET_IP #Pending" >> "$MASTER_FILE"
-                fi
-            fi
-        done
-    fi
-
-    # --- PHASE 4: TELEMETRY LOAD AUDIT + POST-PENDING /24 PROBING CORE ---
-    if [ -s "$LOW_LAT_POOL" ]; then
-        conntrack -L -p udp 2>/dev/null | grep "ASSURED" | while read -r state_line; do
-            BYTE_COUNT=$(echo "$state_line" | grep -oE 'bytes=[0-9]+' | awk -F= '{print $2}' | head -n1)
-            [ -z "$BYTE_COUNT" ] || [ "$BYTE_COUNT" -lt 10000 ] && continue
-            
-            PENDING_IP=$(echo "$state_line" | grep -oE 'dst=[0-9.]+' | awk -F= '{print $2}' | head -n1)
-            if grep -q "^$PENDING_IP" "$LOW_LAT_POOL" 2>/dev/null; then
-                
-                SUBNET_BASE=$(echo "$PENDING_IP" | cut -d. -f1-3)
-                WAN_IP=$(ip -4 route get 1.1.1.1 2>/dev/null | grep -oE 'src [0-9.]+' | awk '{print $2}')
-                [ -z "$WAN_IP" ] && WAN_IP="0.0.0.0"
-                
-                MIN_PING=999
-                RESPONSES_FOUND=0
-                
-                # FIXED: Restored complete curly braces inside awk print evaluation string blocks
-                for host_node in 1 10 25 50; do
-                    (
-                        test_ip="${SUBNET_BASE}.${host_node}"
-                        response=$(ping -4 -I "$WAN_IP" -c 1 -W 1 "$test_ip" 2>/dev/null | grep avg | awk -F/ '{print $5}' | cut -d. -f1)
-                        if [ -n "$response" ]; then
-                            echo "OK:$response"
-                        else
-                            echo "DEAD:0"
-                        fi
-                    ) &
-                done > /tmp/cod_failsafe_probe.txt
-                
-                sleep 0.4
-                wait
-                
-                while read -r probe_line; do
-                    [ -z "$probe_line" ] && continue
-                    status=$(echo "$probe_line" | cut -d: -f1)
-                    p_time=$(echo "$probe_line" | cut -d: -f2)
-                    
-                    if [ "$status" = "OK" ]; then
-                        RESPONSES_FOUND=$((RESPONSES_FOUND + 1))
-                        if [ "$p_time" -lt "$MIN_PING" ]; then MIN_PING="$p_time"; fi
-                    fi
-                done < /tmp/cod_failsafe_probe.txt
-                rm -f /tmp/cod_failsafe_probe.txt
-
-                # STEP A: IF ALL ENDPOINTS ARE DEAD/SILENT -> ROUTE TO UNPINGABLE
-                if [ "$RESPONSES_FOUND" -eq 0 ]; then
-                    sed -i "\|^$PENDING_IP|d" "$LOW_LAT_POOL" 2>/dev/null
-                    sed -i "\|^$PENDING_IP|d" "$MASTER_FILE" 2>/dev/null
-                    echo "$PENDING_IP" >> "$UNPING_POOL"
-                    echo "$PENDING_IP #Unpingable" >> "$MASTER_FILE"
-                    continue
-                fi
-
-                # STEP B: EVALUATE REAL PHYSICAL LATENCY ACCURACY
-                if [ "$MIN_PING" -le "$MAX_LATENCY" ] && [ "$MIN_PING" -ne 999 ]; then
-                    if [ -x "$PROMOTER_SCRIPT" ]; then "$PROMOTER_SCRIPT" & fi
-                else
-                    sed -i "\|^$PENDING_IP|d" "$LOW_LAT_POOL" 2>/dev/null
-                    sed -i "\|^$PENDING_IP|d" "$MASTER_FILE" 2>/dev/null
-                    echo "$PENDING_IP" >> "$HIGH_LAT_POOL"
-                    echo "$PENDING_IP #Blocked" >> "$MASTER_FILE"
-                fi
-            fi
-        done
-    fi
-
-    sort -u "$MASTER_FILE" -o "$MASTER_FILE" 2>/dev/null
-    sort -u "$PRE_PEND_POOL" -o "$PRE_PEND_POOL" 2>/dev/null
-    sort -u "$LOW_LAT_POOL" -o "$LOW_LAT_POOL" 2>/dev/null
-    sort -u "$HIGH_LAT_POOL" -o "$HIGH_LAT_POOL" 2>/dev/null
-    sort -u "$UNPING_POOL" -o "$UNPING_POOL" 2>/dev/null
-    sleep 5
 done
