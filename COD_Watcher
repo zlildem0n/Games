@@ -1,20 +1,23 @@
+cat << 'EOF' > /root/cod_watcher.sh
 #!/bin/sh
 # ==============================================================================
-# SCRIPT 1: STUN-TRIGGERED PATTERN WATCHER (FIXED STRIP PATH)
+# SCRIPT 1: STUN-TRIGGERED WATCHER - LOCAL MAXMIND PRIMARY + CLOUD FAILOVER BUILD
 # ==============================================================================
 XBOX_PORT="49806"
 DUMP_FILE="/root/COD_Dump.txt"
 VERIFY_SCRIPT="/root/cod_verify.sh"
 MASTER_FILE="/root/COD_Master.txt"
+OFFICIAL_POOL="/root/COD_Official_Allowed.txt"
+HIGH_LAT_POOL="/root/COD_Blocked.txt"
 LOCK_FILE="/tmp/cod_verify.lock"
 
 rm -f "$LOCK_FILE"
 touch "$DUMP_FILE" && chmod 666 "$DUMP_FILE"
 trap "wait" CHLD
 
-echo "[*] COD Pattern Watcher Active. Monitoring eth4 interface safely..."
+echo "[*] COD Watcher Active. Monitoring traffic lanes safely..."
 
-tcpdump -i eth4 -n -l "udp port $XBOX_PORT" 2>/dev/null | while read -r tripwire_packet; do
+tcpdump -i eth4 -n -l "udp port $XBOX_PORT or port 3074 or port 3544" 2>/dev/null | while read -r tripwire_packet; do
     EXTRACTED_IPS=$(echo "$tripwire_packet" | grep -oE '[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}')
     [ -z "$EXTRACTED_IPS" ] && continue
     
@@ -27,6 +30,49 @@ tcpdump -i eth4 -n -l "udp port $XBOX_PORT" 2>/dev/null | while read -r tripwire
     done
     [ -z "$SERVER_IP" ] && continue
     
+    # 1. LOCAL PRIMARY + CLOUD QUORUM FAILOVER PORT EXEMPTION CORE
+    if echo "$tripwire_packet" | grep -qE "\.3074|\.3544"; then
+        IS_US=0
+        
+        # Check Local MaxMind First (Zero-Delay Check)
+        if command -v geoiplookup >/dev/null 2>&1; then
+            LOCAL_CC=$(geoiplookup "$SERVER_IP" 2>/dev/null | grep -oE 'GeoIP Country Edition: [A-Z]{2}' | awk '{print $4}')
+            [ "$LOCAL_CC" = "US" ] && IS_US=1
+        fi
+
+        # FAILOVER UNLOCK: If local says out-of-country, check against the 2 Cloud APIs
+        if [ "$IS_US" -eq 0 ]; then
+            CLOUD_VOTES=0
+            
+            # API Vote 1: freeipapi.com
+            GEO_DATA=$(curl -s "https://freeipapi.com{SERVER_IP}" --max-time 2)
+            [ "$(echo "$GEO_DATA" | grep -oE '"countryCode":"[^"]+"' | cut -d'"' -f4)" = "US" ] && CLOUD_VOTES=$((CLOUD_VOTES + 1))
+            
+            # API Vote 2: ipinfo.io
+            IPINFO_DATA=$(curl -s "https://ipinfo.io{SERVER_IP}/json" --max-time 2)
+            [ "$(echo "$IPINFO_DATA" | grep -oE '"country": "[^"]+"' | cut -d'"' -f4)" = "US" ] && CLOUD_VOTES=$((CLOUD_VOTES + 1))
+
+            # Both cloud APIs must agree it is US to override the local block
+            [ "$CLOUD_VOTES" -eq 2 ] && IS_US=1
+        fi
+
+        SUBNET=$(echo "$SERVER_IP" | awk -F. '{print $1"."$2"."$3".0/24"}')
+        if [ "$IS_US" -eq 1 ]; then
+            if ! grep -q "^$SUBNET" "$OFFICIAL_POOL" 2>/dev/null; then
+                echo "$SUBNET" >> "$OFFICIAL_POOL"
+                sed -i "\|^$SERVER_IP|d" "$MASTER_FILE" 2>/dev/null
+                echo "$SUBNET #Official_Allowed" >> "$MASTER_FILE"
+            fi
+        else
+            if ! grep -q "^$SERVER_IP" "$MASTER_FILE" 2>/dev/null; then
+                echo "$SERVER_IP" >> "$HIGH_LAT_POOL"
+                echo "$SERVER_IP #Blocked" >> "$MASTER_FILE"
+            fi
+        fi
+        continue
+    fi
+    
+    # 2. STANDARD ROUTE: Send all other raw server destinations to the frontend dump queue
     if ! grep -q "^$SERVER_IP" "$MASTER_FILE" 2>/dev/null; then
         echo "$SERVER_IP" >> "$DUMP_FILE"
         sort -u "$DUMP_FILE" -o "$DUMP_FILE"
@@ -36,3 +82,5 @@ tcpdump -i eth4 -n -l "udp port $XBOX_PORT" 2>/dev/null | while read -r tripwire
         fi
     fi
 done
+EOF
+sed -i 's/\r//g' /root/cod_watcher.sh && chmod 755 /root/cod_watcher.sh
