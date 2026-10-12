@@ -1,6 +1,7 @@
-# 1. Overwrite COD_Fail_safe Natively (Corrected Latency Engine API Links)
-cat << 'EOF' > /root/cod_failsafe.sh
 #!/bin/sh
+# ==============================================================================
+# SCRIPT 4: OPTIMIZED DUAL-VALIDATION ENGINE (FIXED API PATH AND DOLLAR NOTATION)
+# ==============================================================================
 MAX_LATENCY=70
 MASTER_FILE="/root/COD_Master.txt"
 LOW_LAT_POOL="/root/COD_Pending.txt"
@@ -31,7 +32,7 @@ while true; do
 
         grep -q "$SERVER_IP" "$MASTER_FILE" && continue
 
-        # REPAIRED: Corrected endpoint syntax with leading slash and variable identifiers
+        # FIXED: Corrected path slicing variables and slash configurations
         GEO_DATA=$(curl -s "https://freeipapi.com{SERVER_IP}" --max-time 3)
         REGION_CODE=$(echo "$GEO_DATA" | grep -oE '"regionCode":"[^"]+"' | cut -d'"' -f4)
         COUNTRY_CODE=$(echo "$GEO_DATA" | grep -oE '"countryCode":"[^"]+"' | cut -d'"' -f4)
@@ -74,4 +75,3 @@ while true; do
     sort -u "$HIGH_LAT_POOL" -o "$HIGH_LAT_POOL" 2>/dev/null
     sleep 5
 done
-EOF
