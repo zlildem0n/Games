@@ -1,6 +1,6 @@
 #!/bin/sh
 # ==============================================================================
-# SCRIPT 8: CENTRALIZED MONITORING COMMAND CONSOLE DASHBOARD
+# SCRIPT 8: CENTRALIZED MONITORING COMMAND CONSOLE DASHBOARD (WITH STATUS PANEL)
 # ==============================================================================
 
 # Define absolute file matrix targets matching your storage exactly
@@ -30,10 +30,24 @@ while true; do
     cnt_off=$(wc -l "$OFFICIAL" 2>/dev/null | awk '{print $1}')
     cnt_mast=$(wc -l "$MASTER" 2>/dev/null | awk '{print $1}')
 
+    # Check background process IDs to determine active state
+    pid_watch=$(pgrep -f "/root/cod_watcher.sh" | tr '\n' ' ')
+    pid_prom=$(pgrep -f "/root/cod_promoter.sh" | tr '\n' ' ')
+    pid_fail=$(pgrep -f "/root/cod_failsafe.sh" | tr '\n' ' ')
+
+    if [ -n "$pid_watch" ] && [ "$pid_watch" != " " ]; then stat_watch="\033[0;32mONLINE\033[0m"; else stat_watch="\033[0;31mOFFLINE\033[0m"; fi
+    if [ -n "$pid_prom" ] && [ "$pid_prom" != " " ]; then stat_prom="\033[0;32mONLINE\033[0m"; else stat_prom="\033[0;31mOFFLINE\033[0m"; fi
+    if [ -n "$pid_fail" ] && [ "$pid_fail" != " " ]; then stat_fail="\033[0;32mONLINE\033[0m"; else stat_fail="\033[0;31mOFFLINE\033[0m"; fi
+
     echo "================================================================================"
     echo "         🛡️  CALL OF DUTY HIGH-SPEED GAME SERVER MONITORING CONSOLE 🛡️          "
     echo "================================================================================"
     echo " TIME SNAPSHOT : $(date '+%Y-%m-%d %H:%M:%S')"
+    echo "--------------------------------------------------------------------------------"
+    echo "  ⚙️  BACKGROUND DAEMON RUN-STATES:"
+    printf "  • Watcher Sniper Engine : %s\n" "$stat_watch"
+    printf "  • Promoter /24 Engine   : %s\n" "$stat_prom"
+    printf "  • Failsafe Sweep Engine : %s\n" "$stat_fail"
     echo "--------------------------------------------------------------------------------"
     echo "  [+] STAGE 1: Live Snipped Queue (COD_Dump.txt)          : ${cnt_dump:-0} IPs"
     echo "  [+] STAGE 2: Conntrack Verified (COD_Pre_Pending.txt)  : ${cnt_pre:-0} IPs"
