@@ -10,6 +10,7 @@ MASTER_FILE="/root/COD_Master.txt"
 _temp_queue="/tmp/cod_promoter_queue.txt"
 touch "$_temp_queue"
 
+# 1. Safely snapshot active pending lines
 if [ -s "$PASSED_POOL" ]; then
     cat "$PASSED_POOL" >> "$_temp_queue"
     touch "$PASSED_POOL"
@@ -22,9 +23,11 @@ fi
 
 [ ! -s "$_temp_queue" ] && rm -f "$_temp_queue" && exit 0
 
+# 2. Convert host addresses into broad /24 subnet mask ranges
 while read -r HOST_IP; do
     [ -z "$HOST_IP" ] && continue
     SUBNET=$(echo "$HOST_IP" | awk -F. '{print $1"."$2"."$3".0/24"}')
+    
     echo "$SUBNET" >> "$OFFICIAL_POOL"
     sed -i "\|^$HOST_IP|d" "$MASTER_FILE" 2>/dev/null
     echo "$SUBNET #Official_Allowed" >> "$MASTER_FILE"
@@ -33,4 +36,5 @@ done < "$_temp_queue"
 rm -f "$_temp_queue"
 sort -u "$OFFICIAL_POOL" -o "$OFFICIAL_POOL"
 sort -u "$MASTER_FILE" -o "$MASTER_FILE"
+
 
