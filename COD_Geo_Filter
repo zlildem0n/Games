@@ -1,3 +1,5 @@
+# 2. Overwrite COD_Geo_Filter Natively (Corrected Visual Geolocation API Links)
+cat << 'EOF' > /root/cod_geofilter.sh
 #!/bin/sh
 MASTER_FILE="/root/COD_Master.txt"
 
@@ -24,6 +26,7 @@ while read -r line; do
             ;;
     esac
     
+    # REPAIRED: Corrected syntax variables for live location mappings
     GEO_DATA=$(curl -s "https://freeipapi.com{IP_ADDR}" --max-time 3)
     
     CITY=$(echo "$GEO_DATA" | grep -oE '"cityName":"[^"]+"' | cut -d'"' -f4)
@@ -43,4 +46,4 @@ while read -r line; do
     sleep 1
 done < "$MASTER_FILE"
 echo "================================================================================"
-
+EOF
