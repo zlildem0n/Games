@@ -1,10 +1,9 @@
 #!/bin/sh
 # ==============================================================================
-# SCRIPT 6: ACTIVE PIPELINE DATA PROMOTER (CONNTRACK METRICS -> /24 CONVERTER)
+# SCRIPT 6: ACTIVE PIPELINE DATA PROMOTER (DUAL XBOX METRIC ENGINE)
 # ==============================================================================
 PRE_PENDING_FILE="/root/COD_Pre_Pending.txt"
 PENDING_FILE="/root/COD_Pending.txt"
-XBOX_PORT="49806"
 BYTE_THRESHOLD=10000
 
 if [ ! -f "$PRE_PENDING_FILE" ]; then
@@ -13,39 +12,33 @@ fi
 touch "$PENDING_FILE" && chmod 666 "$PENDING_FILE"
 
 echo "--- LIVE NETFILTER CONNTRACK VOLUME PROMOTER ENGINE ---"
-echo "[*] Monitoring $PRE_PENDING_FILE for high-volume streams (>10KB)..."
+echo "[*] Monitoring $PRE_PENDING_FILE for dual-console streams..."
 echo "================================================================================"
 printf "%-16s | %-12s | %-12s | %s\n" "SERVER IP" "VOLUME (BYTES)" "STATE FLAG" "PROMOTION /24 SUBNET"
 echo "--------------------------------------------------------------------------------"
 
-# Stream live updates seamlessly from the verifier's file descriptor loop
 tail -f -n +1 "$PRE_PENDING_FILE" | while read -r line; do
     [ -z "$line" ] && continue
 
     SERVER_IP=$(echo "$line" | awk '{print $1}')
 
-    # Interrogate conntrack for active UDP data metrics
+    # MULTI-CONSOLE EXPANSION: Scan conntrack tables using an OR pipe matching either port footprint
     if [ -x "$(command -v conntrack)" ]; then
-        RAW_TRACK=$(conntrack -L -p udp --dst "$SERVER_IP" 2>/dev/null | grep -E "sport=$XBOX_PORT|dport=$XBOX_PORT")
+        RAW_TRACK=$(conntrack -L -p udp --dst "$SERVER_IP" 2>/dev/null | grep -E "sport=(49806|49290)|dport=(49806|49290)")
     else
-        RAW_TRACK=$(grep -E "udp.*$SERVER_IP" /proc/net/nf_conntrack 2>/dev/null | grep -E "sport=$XBOX_PORT|dport=$XBOX_PORT")
+        RAW_TRACK=$(grep -E "udp.*$SERVER_IP" /proc/net/nf_conntrack 2>/dev/null | grep -E "sport=(49806|49290)|dport=(49806|49290)")
     fi
 
     [ -z "$RAW_TRACK" ] && continue
 
-    # CRITERIA 1: Verify the connection is established and active
     if ! echo "$RAW_TRACK" | grep -q "ASSURED"; then
         continue
     fi
 
-    # CRITERIA 2: Accumulate bidirectional data flow volume
     TOTAL_BYTES=$(echo "$RAW_TRACK" | grep -oE 'bytes=[0-9]+' | cut -d'=' -f2 | awk '{sum+=$1} END {print sum}')
     [ -z "$TOTAL_BYTES" ] && TOTAL_BYTES=0
 
-    # Verify if traffic exceeds your 10,000-byte threshold limit
     if [ "$TOTAL_BYTES" -gt "$BYTE_THRESHOLD" ]; then
-        
-        # Convert remote endpoint to clear /24 network block notation
         SUBNET_24=$(echo "$SERVER_IP" | sed 's/\.[0-9]*$/\.0\/24/')
         
         if ! grep -q "^$SUBNET_24" "$PENDING_FILE" 2>/dev/null; then
