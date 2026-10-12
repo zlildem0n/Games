@@ -1,0 +1,61 @@
+cat << 'EOF' > /root/COD_Updater
+#!/bin/sh
+# ==============================================================================
+# AUTOMATED REPOSITORY SYNCHRONIZATION & DEPLOYMENT ENGINE (RELEASE ARCHIVE)
+# ==============================================================================
+
+# Target Release Details matching your new Beta_1.2 asset layout
+USER_NAME="zlildem0n"
+REPO_NAME="Games"
+RELEASE_TAG="Beta_1.2"
+
+# URL pointing directly to your uploaded compressed archive
+ARCHIVE_URL="https://github.com/${USER_NAME}/${REPO_NAME}/releases/download/${RELEASE_TAG}/Games.tar.gz"
+
+# File arrays for verification check loops
+BIN_SCRIPTS="cod_watcher.sh cod_promoter.sh cod_failsafe.sh COD_dashboard COD_Verifier COD_service"
+TXT_DATABASES="COD_Blocked.txt COD_Dump.txt COD_Master.txt COD_Official_Allowed.txt COD_Pending.txt COD_Pre_Pending.txt COD_Unpingable.txt COD_Post_Pending.txt"
+
+# Verification Gate: Ensure network layer connectivity to GitHub before updating
+if ! curl -s --connect-timeout 5 https://github.com > /dev/null; then
+    echo "[!] Remote platform unreachable. Skipping scheduled update cycle."
+    exit 1
+fi
+
+echo "[*] Downloading stable framework from GitHub Release..."
+TMP_ARCHIVE="/tmp/Games.tar.gz"
+
+# Download the unified archive tracking redirects (-L)
+if curl -sSL "$ARCHIVE_URL" -o "$TMP_ARCHIVE" && [ -s "$TMP_ARCHIVE" ]; then
+    echo "[+] Archive successfully downloaded. Auto-detecting format and extracting..."
+    
+    # Extract directly into /root/ overriding old files (natively detects tar or gzip format)
+    tar -xf "$TMP_ARCHIVE" -C /root/
+    rm -f "$TMP_ARCHIVE"
+
+    # Loop 1: Post-extraction safety cleaning and execution lock down
+    for script in $BIN_SCRIPTS; do
+        if [ -f "/root/${script}" ]; then
+            # Strip potential Windows carriage returns out of extracted contents
+            sed -i 's/\r$//' "/root/${script}"
+            chmod 755 "/root/${script}"
+            echo " -> Executable verified and locked: /root/${script}"
+        fi
+    done
+else
+    rm -f "$TMP_ARCHIVE"
+    echo "[!] Critical Error: Failed to fetch Games.tar.gz from your Release."
+    exit 1
+fi
+
+# Loop 2: Ensure database text files remain safely deployed
+for txt_file in $TXT_DATABASES; do
+    if [ ! -f "/root/${txt_file}" ]; then
+        touch "/root/${txt_file}"
+        echo " -> Database Structure Formed: /root/${txt_file}"
+    fi
+    chmod 666 "/root/${txt_file}"
+done
+
+echo "[+] Framework synchronization complete."
+EOF
