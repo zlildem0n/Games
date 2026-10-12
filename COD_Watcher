@@ -1,4 +1,3 @@
-cat << 'EOF' > /root/cod_watcher.sh
 #!/bin/sh
 # ==============================================================================
 # SCRIPT 1: STUN-TRIGGERED ENGINE - 50K EXPANDED EDGE WAN CONTEXT WATCHER (FIXED)
@@ -45,8 +44,3 @@ while true; do
     done
     sleep 2
 done
-EOF
-chmod 755 /root/cod_watcher.sh
-
-
-
