@@ -1,4 +1,3 @@
-cat << 'EOF' > /root/cod_failsafe.sh
 #!/bin/sh
 # ==============================================================================
 # SCRIPT 4: LATENCY ENGINE - PRE-PENDING TO PENDING WITH FIXED AWK STREAM PARSING
@@ -180,4 +179,3 @@ while true; do
     sort -u "$UNPING_POOL" -o "$UNPING_POOL" 2>/dev/null
     sleep 5
 done
-EOF
