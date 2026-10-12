@@ -1,9 +1,10 @@
-cat << 'EOF' > /root/cod_verify.sh
 #!/bin/sh
+# ==============================================================================
+# SCRIPT 2: MAILBOX QUEUE PROCESSOR (CLEAN STAGING HANDOFF)
+# ==============================================================================
 MAX_LATENCY=70
 LOCK_FILE="/tmp/cod_verify.lock"
-# RENAMED: Reference target file adjusted from COD_Dump to COD_US_Only
-DUMP_FILE="/root/COD_US_Only.txt"
+DUMP_FILE="/root/COD_Dump.txt"
 PASSED_POOL="/root/COD_Pending.txt"
 BLOCKED_POOL="/root/COD_Blocked.txt"
 UNPING_POOL="/root/COD_Unpingable.txt"
@@ -20,6 +21,8 @@ while [ -s "$DUMP_FILE" ]; do
     
     while read -r TARGET_IP; do
         [ -z "$TARGET_IP" ] && continue
+        
+        # 1. CORE MASTER AUTHENTICATION INFRASTRUCTURE EXCEPTION GATE
         case "$TARGET_IP" in
             185.34.107.*)
                 echo "$TARGET_IP" >> "$PASSED_POOL"
@@ -31,21 +34,7 @@ while [ -s "$DUMP_FILE" ]; do
                 ;;
         esac
         
-        VOTES_PASSED=0
-        
-        GEO_DATA=$(curl -s "https://freeipapi.com{TARGET_IP}" --max-time 3)
-        [ "$(echo "$GEO_DATA" | grep -oE '"countryCode":"[^"]+"' | cut -d'"' -f4)" = "US" ] && VOTES_PASSED=$((VOTES_PASSED + 1))
-        
-        IPINFO_DATA=$(curl -s "https://ipinfo.io{TARGET_IP}/json" --max-time 3)
-        [ "$(echo "$IPINFO_DATA" | grep -oE '"country": "[^"]+"' | cut -d'"' -f4)" = "US" ] && VOTES_PASSED=$((VOTES_PASSED + 1))
-
-        if [ "$VOTES_PASSED" -lt 2 ]; then
-            echo "$TARGET_IP" >> "$BLOCKED_POOL"
-            sed -i "\|^$TARGET_IP|d" "$MASTER_FILE" 2>/dev/null
-            echo "$TARGET_IP #Blocked" >> "$MASTER_FILE"
-            continue
-        fi
-
+        # 2. RUN HIGH-PRECISION LATENCY DIAGNOSTIC ROUND-TRIP SWEEPS
         PING_TIME=$(ping -4 -I "$WAN_IP" -c 2 -W 1 "$TARGET_IP" 2>/dev/null | grep avg | awk -F/ '{print $5}' | cut -d. -f1)
         if [ -z "$PING_TIME" ]; then
             GATEWAY_IP=$(echo "$TARGET_IP" | awk -F. '{print $1"."$2"."$3".1"}')
@@ -55,6 +44,7 @@ while [ -s "$DUMP_FILE" ]; do
         LABEL_TEXT="Pending"
         if [ -n "$PING_TIME" ]; then
             if [ "$PING_TIME" -le "$MAX_LATENCY" ]; then
+                # Escalate to standard processing pools
                 echo "$TARGET_IP" >> "$PASSED_POOL"
                 LABEL_TEXT="Pending"
                 _new_pass=1
@@ -81,6 +71,5 @@ rm -f "$LOCK_FILE"
 if [ "$_new_pass" -eq 1 ] && [ -x "$PROMOTER_SCRIPT" ]; then
     "$PROMOTER_SCRIPT" &
 fi
-EOF
-sed -i 's/\r//g' /root/cod_verify.sh && chmod 755 /root/cod_verify.sh
+
 
