@@ -1,58 +1,52 @@
 #!/bin/sh
 # ==============================================================================
-# SCRIPT 5: REAL-TIME MAXMIND GEOLOCATE INSPECTOR (PRODUCTION FIXED)
+# SCRIPT 1: STUN-TRIGGERED ENGINE - 50K EXPANDED EDGE WAN CONTEXT WATCHER
 # ==============================================================================
+XBOX_PORT="49806"
+DUMP_FILE="/root/COD_Dump.txt"
 MASTER_FILE="/root/COD_Master.txt"
+WAN_IP="24.229.189.181"          # Your public/WAN IP
+IFACE="eth4"                     # WAN edge interface
 
-if [ ! -s "$MASTER_FILE" ]; then
-    echo "[!] Master tracking file is completely empty. No gaming footprints found."
-    exit 0
-fi
+touch "$DUMP_FILE" "$MASTER_FILE" 2>/dev/null
+chmod 666 "$DUMP_FILE" 2>/dev/null
 
-echo "--- LIVE CLOUD-MAXMIND GAME SERVER ROUTING MAP ---"
-echo "================================================================================"
-printf "%-16s | %-12s | %-28s | %s\n" "SERVER IP" "STATUS" "MAXMIND PHYSICAL ZONE" "DATA CENTER PROVIDER"
-echo "--------------------------------------------------------------------------------"
+echo "[*] COD Sniper Active. Monitoring WAN edge interface $IFACE smoothly..."
 
-while read -r line; do
-    [ -z "$line" ] && continue
+# Strict primitive kernel filter targeting exact byte-length handshakes
+BPF_FILTER="udp and port $XBOX_PORT and \
+(port 3074 or port 3544 or (udp[2:2] >= 30000 and udp[2:2] <= 50000) or (udp[0:2] >= 30000 and udp[0:2] <= 50000)) and \
+(udp[11:2] == 16 or udp[11:2] == 214)"
 
-    IP_ADDR=$(echo "$line" | awk '{print $1}')
-    STATUS_TAG=$(echo "$line" | awk '{print $2}')
-    [ -z "$STATUS_TAG" ] && STATUS_TAG="ACTIVE"
+while true; do
+    # Force line-buffered mode (-l) to output clean matches instantly
+    tcpdump -l -npi "$IFACE" "$BPF_FILTER" 2>/dev/null | while read -r line; do
 
-    # Hard-coded Activision / Demonware STUN range
-    case "$IP_ADDR" in
-        185.34.107.*)
-            printf "📍 %-16s | %-12s | %-28s | %s\n" \
-                "$IP_ADDR" "$STATUS_TAG" "Santa Monica, California (US)" "Activision Master STUN [Demonware]"
+        # Structurally parse out the source IP and destination IP
+        # Strips trailing port numbers cleanly
+        SRC_IP=$(echo "$line" | awk '{print $3}' | sed 's/\.[0-9]*$//')
+        DST_IP=$(echo "$line" | awk '{print $5}' | sed 's/\.[0-9]*$//' | tr -d ':')
+
+        SERVER_IP=""
+
+        # Evaluate packet directionality relative to your edge WAN IP
+        if [ "$SRC_IP" = "$WAN_IP" ]; then
+            SERVER_IP="$DST_IP"
+        elif [ "$DST_IP" = "$WAN_IP" ]; then
+            SERVER_IP="$SRC_IP"
+        fi
+
+        # Safety catch for empty / invalid / loopback addresses
+        if [ -z "$SERVER_IP" ] || [ "$SERVER_IP" = "0.0.0.0" ] || [ "$SERVER_IP" = "127.0.0.1" ]; then
             continue
-            ;;
-    esac
+        fi
 
-    # Single Query to freeipapi.com (includes both location and provider data)
-    GEO_DATA=$(curl -s "https://free.freeipapi.com/api/v1/json/${IP_ADDR}" --max-time 3)
+        # Quiet check against Master before appending (protects flash storage)
+        if ! grep -q "^$SERVER_IP" "$MASTER_FILE" 2>/dev/null; then
+            echo "$SERVER_IP" >> "$DUMP_FILE"
+        fi
+    done
 
-    CITY=$(echo "$GEO_DATA"    | grep -oE '"cityName":"[^"]+"'    | cut -d'"' -f4)
-    REGION=$(echo "$GEO_DATA"  | grep -oE '"regionName":"[^"]+"'  | cut -d'"' -f4)
-    COUNTRY=$(echo "$GEO_DATA" | grep -oE '"countryCode":"[^"]+"' | cut -d'"' -f4)
-    PROVIDER=$(echo "$GEO_DATA"| grep -oE '"asName":"[^"]+"'     | cut -d'"' -f4)
-
-    if [ -z "$PROVIDER" ] || echo "$PROVIDER" | grep -qiE 'undefined|error|not found|rate limit'; then
-        PROVIDER="Unknown Gaming Infrastructure"
-    fi
-
-    if [ -n "$CITY" ] && [ -n "$REGION" ]; then
-        LOCATION_STRING="${CITY}, ${REGION} (${COUNTRY})"
-        printf "📍 %-16s | %-12s | %-28s | [%s]\n" \
-            "$IP_ADDR" "$STATUS_TAG" "$LOCATION_STRING" "$PROVIDER"
-    else
-        printf "❌ %-16s | %-12s | %-28s | %s\n" \
-            "$IP_ADDR" "$STATUS_TAG" "Unknown Location Zone" "[Cloud Query Timeout]"
-    fi
-
-    # 1-second delay is perfect for freeipapi's rate-limits (60 requests per minute)
-    sleep 1   
-done < "$MASTER_FILE"
-
-echo "================================================================================"
+    # If tcpdump exits for any reason, wait briefly and restart
+    sleep 2
+done
