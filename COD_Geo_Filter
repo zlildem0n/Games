@@ -16,33 +16,43 @@ echo "--------------------------------------------------------------------------
 
 while read -r line; do
     [ -z "$line" ] && continue
-    
+
     IP_ADDR=$(echo "$line" | awk '{print $1}')
     STATUS_TAG=$(echo "$line" | awk '{print $2}')
-    
+
+    # Hard-coded Activision / Demonware STUN range
     case "$IP_ADDR" in
         185.34.107.*)
-            printf "📍 %-16s | %-12s | %-28s | %s\n" "$IP_ADDR" "$STATUS_TAG" "Santa Monica, California (US)" "Activision Master STUN [Demonware]"
+            printf "📍 %-16s | %-12s | %-28s | %s\n" \
+                "$IP_ADDR" "$STATUS_TAG" "Santa Monica, California (US)" "Activision Master STUN [Demonware]"
             continue
             ;;
     esac
-    
-    GEO_DATA=$(curl -s "https://freeipapi.com{IP_ADDR}" --max-time 3)
-    
-    CITY=$(echo "$GEO_DATA" | grep -oE '"cityName":"[^"]+"' | cut -d'"' -f4)
+
+    # Free IP geolocation (free tier)
+    GEO_DATA=$(curl -s "https://free.freeipapi.com/api/v1/json/${IP_ADDR}" --max-time 3)
+
+    CITY=$(echo "$GEO_DATA"   | grep -oE '"cityName":"[^"]+"'   | cut -d'"' -f4)
     REGION=$(echo "$GEO_DATA" | grep -oE '"regionName":"[^"]+"' | cut -d'"' -f4)
-    COUNTRY=$(echo "$GEO_DATA" | grep -oE '"countryCode":"[^"]+"' | cut -d'"' -f4)
-    
-    PROVIDER=$(curl -s "https://ipapi.co{IP_ADDR}/org/" --max-time 3 | tr -d '\r\n')
-    [ -z "$PROVIDER" ] || echo "$PROVIDER" | grep -q "Undefined" && PROVIDER="Unknown Gaming Infrastructure"
+    COUNTRY=$(echo "$GEO_DATA"| grep -oE '"countryCode":"[^"]+"'| cut -d'"' -f4)
+
+    # Organization / ASN provider
+    PROVIDER=$(curl -s "https://ipapi.co/${IP_ADDR}/org/" --max-time 3 | tr -d '\r\n')
+
+    if [ -z "$PROVIDER" ] || echo "$PROVIDER" | grep -qiE 'undefined|error|not found|rate limit'; then
+        PROVIDER="Unknown Gaming Infrastructure"
+    fi
 
     if [ -n "$CITY" ] && [ -n "$REGION" ]; then
         LOCATION_STRING="${CITY}, ${REGION} (${COUNTRY})"
-        printf "📍 %-16s | %-12s | %-28s | [%s]\n" "$IP_ADDR" "$STATUS_TAG" "$LOCATION_STRING" "$PROVIDER"
+        printf "📍 %-16s | %-12s | %-28s | [%s]\n" \
+            "$IP_ADDR" "$STATUS_TAG" "$LOCATION_STRING" "$PROVIDER"
     else
-        printf "❌ %-16s | %-12s | %-28s | %s\n" "$IP_ADDR" "$STATUS_TAG" "Unknown Location Zone" "[Cloud Query Timeout]"
+        printf "❌ %-16s | %-12s | %-28s | %s\n" \
+            "$IP_ADDR" "$STATUS_TAG" "Unknown Location Zone" "[Cloud Query Timeout]"
     fi
-    
-    sleep 1
+
+    sleep 1   # polite rate-limit for free APIs
 done < "$MASTER_FILE"
+
 echo "================================================================================"
