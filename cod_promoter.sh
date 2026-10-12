@@ -19,7 +19,7 @@ printf "%-16s | %-12s | %-12s | %s\n" "SERVER IP" "VOLUME (BYTES)" "STATE FLAG" 
 echo "--------------------------------------------------------------------------------"
 
 # Stream incoming verified IPs from the verifier's file in real-time
-tail -n 0 -f "$PRE_PENDING_FILE" | while read -r line; do
+tail -f -n +1 "$PRE_PENDING_FILE" | while read -r line; do
     [ -z "$line" ] && continue
 
     SERVER_IP=$(echo "$line" | awk '{print $1}')
