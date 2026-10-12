@@ -34,5 +34,3 @@ echo "  Unpingable Pool:    $(wc -l < /root/COD_Unpingable.txt 2>/dev/null || ec
 echo "----------------------------------------------"
 echo "  Total Logs:         $(wc -l < /root/COD_Master.txt 2>/dev/null || echo 0)"
 echo "=============================================="
-
-chmod 755 /root/cod_scoreboard.sh
