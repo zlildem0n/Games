@@ -1,17 +1,84 @@
-[Unit]
-Description=Call of Duty Matchmaking Logistics Engine
-After=network.target network-online.target unifi.service
-Wants=network-online.target
+#!/bin/sh
+# ==============================================================================
+# SCRIPT 9: SYSTEM SERVICE ORCHESTRATION LAYER (BACKGROUND DAEMON CONTROL)
+# ==============================================================================
 
-[Service]
-Type=simple
-User=root
-WorkingDirectory=/root
-ExecStart=/root/cod_failsafe.sh
-Restart=always
-RestartSec=5
-StandardOutput=append:/var/log/cod_engine_system.log
-StandardError=append:/var/log/cod_engine_system.log
+# Define our core core executable modules
+DAEMONS="cod_watcher.sh cod_promoter.sh cod_failsafe.sh"
 
-[Install]
-WantedBy=multi-user.target
+start_services() {
+    echo "[*] Initializing Call of Duty Framework Background Daemons..."
+    for script in $DAEMONS; do
+        if [ ! -f "/root/$script" ]; then
+            echo " -> ❌ Error: /root/$script is missing. Run COD_Updater first."
+            continue
+        fi
+
+        # Check if this specific module is already active in background memory
+        PID=$(pgrep -f "sh /root/$script")
+        if [ -n "$PID" ]; then
+            echo " -> ⚠️  Notice: $script is already running silently (PID: $PID)"
+        else
+            # Launch the script into the background detached safely via nohup
+            nohup sh "/root/$script" > /dev/null 2>&1 &
+            sleep 0.5
+            NEW_PID=$(pgrep -f "sh /root/$script")
+            echo " -> 🟢 Launched: $script safely into system background (PID: $NEW_PID)"
+        fi
+    done
+    echo "[+] All background workflows synchronized."
+}
+
+stop_services() {
+    echo "[*] Terminating Call of Duty Framework Background Daemons..."
+    for script in $DAEMONS; do
+        PID=$(pgrep -f "sh /root/$script")
+        if [ -n "$PID" ]; then
+            kill -9 $PID >/dev/null 2>&1
+            echo " -> 🛑 Terminated: $script background session (Wiped PID: $PID)"
+        else
+            echo " -> ℹ️  Inactive: $script was not running in memory."
+        fi
+    done
+    echo "[+] System background spaces cleared."
+}
+
+check_status() {
+    echo "================================================================================"
+    echo "            📋 SYSTEM CORE CONSOLE WORKING SERVICE METRICS MATRIX"
+    echo "================================================================================"
+    for script in $DAEMONS; do
+        PID=$(pgrep -f "sh /root/$script")
+        if [ -n "$PID" ]; then
+            printf "  %-20s : \033[0;32m%-15s\033[0m (Active Process ID: %s)\n" "$script" "ONLINE" "$PID"
+        else
+            printf "  %-20s : \033[0;31m%-15s\033[0m (No Active Background Session)\n" "$script" "OFFLINE"
+        fi
+    done
+    echo "================================================================================"
+}
+
+# Evaluate the command argument flag passed by the user
+case "$1" in
+    start)
+        start_services
+        ;;
+    stop)
+        stop_services
+        ;;
+    status)
+        check_status
+        ;;
+    restart)
+        stop_services
+        sleep 1
+        start_services
+        ;;
+    *)
+        echo "================================================================================"
+        echo " 🛠️  COD OPERATIONAL SERVICE INFRASTRUCTURE INTERFACE MANAGER"
+        echo "================================================================================"
+        echo " Usage Command Options: /root/COD_service [start|stop|restart|status]"
+        echo "================================================================================"
+        ;;
+esac
