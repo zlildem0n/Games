@@ -67,3 +67,4 @@ rm -f "$LOCK_FILE"
 if [ "$_new_pass" -eq 1 ] && [ -x "$PROMOTER_SCRIPT" ]; then
     "$PROMOTER_SCRIPT" &
 fi
+
