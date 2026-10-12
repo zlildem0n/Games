@@ -1,0 +1,32 @@
+cat << 'EOF' > /root/cod_scoreboard.sh
+#!/bin/sh
+echo "--- ACTIVE GAME SCOREBOARD (5s Refresh) ---"
+echo "=============================================="
+
+if ps w | grep -v grep | grep -q "cod_watcher.sh"; then
+    STATUS_WATCHER="\033[0;32m[ ACTIVE ]\033[0m"
+else
+    STATUS_WATCHER="\033[0;31m[ INACTIVE ]\033[0m"
+fi
+
+if ps w | grep -v grep | grep -q -E "cod_failsafe.sh|cod_latency_audit.sh"; then
+    STATUS_AUDITOR="\033[0;32m[ ACTIVE ]\033[0m"
+else
+    STATUS_AUDITOR="\033[0;31m[ INACTIVE ]\033[0m"
+fi
+
+printf "  Packet Watcher:     %b\n" "$STATUS_WATCHER"
+printf "  Latency Auditor:    %b\n" "$STATUS_AUDITOR"
+echo "----------------------------------------------"
+# RENAMED: Dashboard view updated from Dump Mailbox to US Only Staging
+echo "  US Only Staging:    $(wc -l < /root/COD_US_Only.txt 2>/dev/null || echo 0)"
+echo "----------------------------------------------"
+echo "  Official Allowed:   $(wc -l < /root/COD_Official_Allowed.txt 2>/dev/null || echo 0)"
+echo "  Pending (Standard): $(grep -c '#Pending' /root/COD_Master.txt 2>/dev/null || echo 0)"
+echo "  Blocked:            $(grep -c '#Blocked' /root/COD_Master.txt 2>/dev/null || echo 0)"
+echo "  Unpingable:         $(grep -c '#Unpingable' /root/COD_Master.txt 2>/dev/null || echo 0)"
+echo "----------------------------------------------"
+echo "  Total Logs:         $(wc -l < /root/COD_Master.txt 2>/dev/null || echo 0)"
+echo "=============================================="
+EOF
+chmod 755 /root/cod_scoreboard.sh
