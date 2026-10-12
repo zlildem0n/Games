@@ -1,16 +1,17 @@
 #!/bin/sh
 # ==============================================================================
-# SCRIPT 7: PARALLEL SUBNET SWEEPER & LATENCY FILTER (70MS MAX / UNPINGABLE SPLIT)
+# SCRIPT 7: PARALLEL SUBNET SWEEPER & THREE-WAY LATENCY ROUTING ROUTINE
 # ==============================================================================
 PENDING_FILE="/root/COD_Pending.txt"
 POST_PENDING_FILE="/root/COD_Post_Pending.txt"
 UNPINGABLE_FILE="/root/COD_Unpingable.txt"
+BLOCKED_FILE="/root/COD_Blocked.txt"
 LATENCY_LIMIT=70
 
 if [ ! -f "$PENDING_FILE" ]; then
     touch "$PENDING_FILE" && chmod 666 "$PENDING_FILE"
 fi
-touch "$POST_PENDING_FILE" "$UNPINGABLE_FILE" && chmod 666 "$POST_PENDING_FILE" "$UNPINGABLE_FILE"
+touch "$POST_PENDING_FILE" "$UNPINGABLE_FILE" "$BLOCKED_FILE" && chmod 666 "$POST_PENDING_FILE" "$UNPINGABLE_FILE" "$BLOCKED_FILE"
 
 echo "--- LIVE PARALLEL ICMP SUBNET SWEEPER ENGINE ---"
 echo "[*] Monitoring $PENDING_FILE for new /24 subnets..."
@@ -70,9 +71,9 @@ tail -n 0 -f "$PENDING_FILE" | while read -r line; do
     # Safely clear the memory-backed worker files
     rm -rf "$TMP_DIR"
 
-    # ROUTING CRITERIA Evaluation
+    # THREE-WAY ROUTING CRITERIA Evaluation
     if [ "$TOTAL_RESPONSES" -eq 0 ]; then
-        # PATH A: The entire subnet is completely unpingable (0 host responses recorded)
+        # PATH A: The entire subnet is completely unpingable
         if ! grep -q "^$SUBNET_24" "$UNPINGABLE_FILE" 2>/dev/null; then
             echo "$SUBNET_24" >> "$UNPINGABLE_FILE"
         fi
@@ -84,12 +85,15 @@ tail -n 0 -f "$PENDING_FILE" | while read -r line; do
         if ! grep -q "^$SUBNET_24" "$POST_PENDING_FILE" 2>/dev/null; then
             echo "$SUBNET_24" >> "$POST_PENDING_FILE"
         fi
-        printf "🟢 %-18s | \033[0;32m%3sms\033[0m       | PASSED ROUTING FILTER\n" \
+        printf "🟢 %-18s | \033[0;32m%3sms\033[0m       | PASSED TO POST_PENDING\n" \
             "$SUBNET_24" "$BEST_MS"
 
     else
-        # PATH C: Active hosts were found, but their ping time is too high (>70ms)
-        printf "❌ %-18s | %-12s | FAILED LATENCY GATE (>%sms)\n" \
-            "$SUBNET_24" "${BEST_MS}ms" "$LATENCY_LIMIT"
+        # PATH C: Active hosts were found, but their ping time is above 70ms
+        if ! grep -q "^$SUBNET_24" "$BLOCKED_FILE" 2>/dev/null; then
+            echo "$SUBNET_24" >> "$BLOCKED_FILE"
+        fi
+        printf "❌ %-18s | \033[0;31m%3sms\033[0m       | HIGH LATENCY -> BLOCKED.TXT\n" \
+            "$SUBNET_24" "$BEST_MS"
     fi
 done
