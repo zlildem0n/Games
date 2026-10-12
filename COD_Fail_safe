@@ -1,83 +1,67 @@
-cat << 'EOF' > /root/cod_failsafe.sh
+cat << 'EOF' > /root/cod_watcher.sh
 #!/bin/sh
+XBOX_PORT="49806"
+# RENAMED: Shifted target file destination from COD_Dump to COD_US_Only
+DUMP_FILE="/root/COD_US_Only.txt"
+VERIFY_SCRIPT="/root/cod_verify.sh"
 MASTER_FILE="/root/COD_Master.txt"
-US_ONLY_FILE="/root/COD_US_Only.txt"
-LOW_LAT_POOL="/root/COD_Pending.txt"
-HIGH_LAT_POOL="/root/COD_Blocked.txt"
 OFFICIAL_POOL="/root/COD_Official_Allowed.txt"
-PROMOTER_SCRIPT="/root/cod_promoter.sh"
+HIGH_LAT_POOL="/root/COD_Blocked.txt"
+LOCK_FILE="/tmp/cod_verify.lock"
 
-touch "$MASTER_FILE" "$US_ONLY_FILE" "$LOW_LAT_POOL" "$HIGH_LAT_POOL" "$OFFICIAL_POOL"
+rm -f "$LOCK_FILE"
+touch "$DUMP_FILE" && chmod 666 "$DUMP_FILE"
+trap "wait" CHLD
 
-while true; do
-    conntrack -L -p udp 2>/dev/null | grep "ASSURED" | grep "192.168.1.15" | grep "port=49806" | while read -r state_line; do
-        SERVER_IP=$(echo "$state_line" | grep -oE 'dst=[0-9.]+' | awk -F= '{print $2}' | head -n1)
-        [ -z "$SERVER_IP" ] && continue
-        echo "$SERVER_IP" | grep -qE "^(192\.168|127\.)" && continue
-        grep -q "$SERVER_IP" "$MASTER_FILE" && continue
+echo "[*] COD Watcher Active. Monitoring traffic lanes safely..."
 
-        IS_US=0
-        
-        # FIXED: Multi-binary local checking to support mmdblookup
-        if command -v mmdblookup >/dev/null 2>&1; then
-            LOCAL_CC=$(mmdblookup --ip "$SERVER_IP" --id country iso_code 2>/dev/null | grep -oE '"[A-Z]{2}"' | tr -d '"')
-            [ "$LOCAL_CC" = "US" ] && IS_US=1
-        elif command -v geoiplookup >/dev/null 2>&1; then
-            LOCAL_CC=$(geoiplookup "$SERVER_IP" 2>/dev/null | grep -oE 'GeoIP Country Edition: [A-Z]{2}' | awk '{print $4}')
-            [ "$LOCAL_CC" = "US" ] && IS_US=1
-        fi
-
-        if [ "$IS_US" -eq 0 ]; then
-            CLOUD_VOTES=0
-            GEO_DATA=$(curl -s "https://freeipapi.com{SERVER_IP}" --max-time 3)
-            [ "$(echo "$GEO_DATA" | grep -oE '"countryCode":"[^"]+"' | cut -d'"' -f4)" = "US" ] && CLOUD_VOTES=$((CLOUD_VOTES + 1))
-            
-            IPINFO_DATA=$(curl -s "https://ipinfo.io{SERVER_IP}/json" --max-time 3)
-            [ "$(echo "$IPINFO_DATA" | grep -oE '"country": "[^"]+"' | cut -d'"' -f4)" = "US" ] && CLOUD_VOTES=$((CLOUD_VOTES + 1))
-
-            [ "$CLOUD_VOTES" -eq 2 ] && IS_US=1
-        fi
-
-        if [ "$IS_US" -eq 1 ]; then
-            echo "$SERVER_IP" >> "$US_ONLY_FILE"
-            sort -u "$US_ONLY_FILE" -o "$US_ONLY_FILE"
-        else
-            echo "$SERVER_IP" >> "$HIGH_LAT_POOL"
-            echo "$SERVER_IP #Blocked" >> "$MASTER_FILE"
+tcpdump -i eth4 -n -l "udp port $XBOX_PORT or port 3074 or port 3544" 2>/dev/null | while read -r tripwire_packet; do
+    EXTRACTED_IPS=$(echo "$tripwire_packet" | grep -oE '[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}')
+    [ -z "$EXTRACTED_IPS" ] && continue
+    
+    SERVER_IP=""
+    for ip_check in $EXTRACTED_IPS; do
+        if [ "$ip_check" != "192.168.1.15" ] && [ "$ip_check" != "24.229.189.181" ] && [ "$ip_check" != "0.0.0.0" ]; then
+            SERVER_IP="$ip_check"
+            break
         fi
     done
+    [ -z "$SERVER_IP" ] && continue
+    
+    if echo "$tripwire_packet" | grep -qE "\.3074|\.3544"; then
+        VOTES_PASSED=0
+        
+        GEO_DATA=$(curl -s "https://freeipapi.com{SERVER_IP}" --max-time 2)
+        [ "$(echo "$GEO_DATA" | grep -oE '"countryCode":"[^"]+"' | cut -d'"' -f4)" = "US" ] && VOTES_PASSED=$((VOTES_PASSED + 1))
+        
+        IPINFO_DATA=$(curl -s "https://ipinfo.io{SERVER_IP}/json" --max-time 2)
+        [ "$(echo "$IPINFO_DATA" | grep -oE '"country": "[^"]+"' | cut -d'"' -f4)" = "US" ] && VOTES_PASSED=$((VOTES_PASSED + 1))
 
-    if [ -s "$US_ONLY_FILE" ]; then
-        conntrack -L -p udp 2>/dev/null | grep "ASSURED" | while read -r state_line; do
-            PKT_COUNT=$(echo "$state_line" | grep -oE 'packets=[0-9]+' | awk -F= '{print $2}' | head -n1)
-            [ -z "$PKT_COUNT" ] && continue
-            
-            if [ "$PKT_COUNT" -eq 12 ] || [ "$PKT_COUNT" -eq 666 ]; then
-                TARGET_IP=$(echo "$state_line" | grep -oE 'dst=[0-9.]+' | awk -F= '{print $2}' | head -n1)
-                if grep -q "^$TARGET_IP" "$US_ONLY_FILE" 2>/dev/null; then
-                    sed -i "\|^$TARGET_IP|d" "$US_ONLY_FILE" 2>/dev/null
-                    echo "$TARGET_IP" >> "$LOW_LAT_POOL"
-                    echo "$TARGET_IP #Pending" >> "$MASTER_FILE"
-                fi
+        SUBNET=$(echo "$SERVER_IP" | awk -F. '{print $1"."$2"."$3".0/24"}')
+        if [ "$VOTES_PASSED" -ge 2 ]; then
+            if ! grep -q "^$SUBNET" "$OFFICIAL_POOL" 2>/dev/null; then
+                echo "$SUBNET" >> "$OFFICIAL_POOL"
+                sed -i "\|^$SERVER_IP|d" "$MASTER_FILE" 2>/dev/null
+                echo "$SUBNET #Official_Allowed" >> "$MASTER_FILE"
             fi
-        done
-    fi
-
-    if [ -s "$LOW_LAT_POOL" ]; then
-        conntrack -L -p udp 2>/dev/null | grep "ASSURED" | while read -r state_line; do
-            BYTE_COUNT=$(echo "$state_line" | grep -oE 'bytes=[0-9]+' | awk -F= '{print $2}' | head -n1)
-            [ -z "$BYTE_COUNT" ] || [ "$BYTE_COUNT" -lt 10000 ] && continue
-            
-            PENDING_IP=$(echo "$state_line" | grep -oE 'dst=[0-9.]+' | awk -F= '{print $2}' | head -n1)
-            if grep -q "^$PENDING_IP" "$LOW_LAT_POOL" 2>/dev/null; then
-                if [ -x "$PROMOTER_SCRIPT" ]; then "$PROMOTER_SCRIPT" & fi
+        else
+            if ! grep -q "^$SERVER_IP" "$MASTER_FILE" 2>/dev/null; then
+                echo "$SERVER_IP" >> "$HIGH_LAT_POOL"
+                echo "$SERVER_IP #Blocked" >> "$MASTER_FILE"
             fi
-        done
+        fi
+        continue
     fi
-
-    sort -u "$MASTER_FILE" -o "$MASTER_FILE" 2>/dev/null
-    sort -u "$LOW_LAT_POOL" -o "$LOW_LAT_POOL" 2>/dev/null
-    sort -u "$HIGH_LAT_POOL" -o "$HIGH_LAT_POOL" 2>/dev/null
-    sleep 5
+    
+    if ! grep -q "^$SERVER_IP" "$MASTER_FILE" 2>/dev/null; then
+        echo "$SERVER_IP" >> "$DUMP_FILE"
+        sort -u "$DUMP_FILE" -o "$DUMP_FILE"
+        if [ ! -e "$LOCK_FILE" ]; then
+            touch "$LOCK_FILE"
+            "$VERIFY_SCRIPT" &
+        fi
+    fi
 done
 EOF
+sed -i 's/\r//g' /root/cod_watcher.sh && chmod 755 /root/cod_watcher.sh
+
