@@ -3,11 +3,15 @@
 # SCRIPT 5: REAL-TIME CONNTRACK UDP ASSURED CONTEXT VERIFIER
 # ==============================================================================
 DUMP_FILE="/root/COD_Dump.txt"
+PRE_PENDING_FILE="/root/COD_Pre_Pending.txt"
 XBOX_PORT="49806"
 
 if [ ! -f "$DUMP_FILE" ]; then
     touch "$DUMP_FILE" && chmod 666 "$DUMP_FILE"
 fi
+
+# Ensure the Pre-Pending tracking file exists safely
+touch "$PRE_PENDING_FILE" && chmod 666 "$PRE_PENDING_FILE"
 
 echo "--- LIVE NETFILTER CONNTRACK ACTIVE VERIFICATION ENGINE ---"
 echo "[*] Streaming server IPs from $DUMP_FILE and inspecting states..."
@@ -51,6 +55,11 @@ tail -n 0 -f "$DUMP_FILE" | while read -r line; do
 
     # Drop processing if the network state fails port block validation
     [ "$IS_VALID_PORT" -eq 0 ] && continue
+
+    # Duplicate mitigation check before updating flash filesystem storage
+    if ! grep -q "^$SERVER_IP" "$PRE_PENDING_FILE" 2>/dev/null; then
+        echo "$SERVER_IP" >> "$PRE_PENDING_FILE"
+    fi
 
     # Output verified confirmation to screen with assurance tag
     printf "🟢 %-16s | \033[0;32m%-12s\033[0m | %-12s | UDP Block Match (%s) [666 Assured]\n" \
