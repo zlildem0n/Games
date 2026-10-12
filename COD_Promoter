@@ -1,6 +1,6 @@
 #!/bin/sh
 # ==============================================================================
-# SCRIPT 6: ACTIVE PIPELINE DATA PROMOTER (CONNTRACK HEAVY METRICS LOOP)
+# SCRIPT 6: ACTIVE PIPELINE DATA PROMOTER (CONNTRACK METRICS -> /24 CONVERTER)
 # ==============================================================================
 PRE_PENDING_FILE="/root/COD_Pre_Pending.txt"
 PENDING_FILE="/root/COD_Pending.txt"
@@ -15,7 +15,7 @@ touch "$PENDING_FILE" && chmod 666 "$PENDING_FILE"
 echo "--- LIVE NETFILTER CONNTRACK VOLUME PROMOTER ENGINE ---"
 echo "[*] Monitoring $PRE_PENDING_FILE for high-volume streams (>10KB)..."
 echo "================================================================================"
-printf "%-16s | %-12s | %-12s | %s\n" "SERVER IP" "VOLUME (BYTES)" "STATE FLAG" "PROMOTION STATUS"
+printf "%-16s | %-12s | %-12s | %s\n" "SERVER IP" "VOLUME (BYTES)" "STATE FLAG" "PROMOTION /24 SUBNET"
 echo "--------------------------------------------------------------------------------"
 
 # Stream incoming verified IPs from the verifier's file in real-time
@@ -26,10 +26,8 @@ tail -n 0 -f "$PRE_PENDING_FILE" | while read -r line; do
 
     # Query conntrack specifically for total byte accounting metrics
     if [ -x "$(command -v conntrack)" ]; then
-        # Pull extended conntrack data matching our exact Xbox port and target game server
         RAW_TRACK=$(conntrack -L -p udp --dst "$SERVER_IP" 2>/dev/null | grep -E "sport=$XBOX_PORT|dport=$XBOX_PORT")
     else
-        # Fallback reading directly from system nf_conntrack if binary is unavailable
         RAW_TRACK=$(grep -E "udp.*$SERVER_IP" /proc/net/nf_conntrack 2>/dev/null | grep -E "sport=$XBOX_PORT|dport=$XBOX_PORT")
     fi
 
@@ -42,26 +40,26 @@ tail -n 0 -f "$PRE_PENDING_FILE" | while read -r line; do
     fi
 
     # CRITERIA 2: Parse out total transmitted bytes from the state table row
-    # Isolates byte counter key-pairs (e.g. bytes=12345) and sums up both directional flows
     TOTAL_BYTES=$(echo "$RAW_TRACK" | grep -oE 'bytes=[0-9]+' | cut -d'=' -f2 | awk '{sum+=$1} END {print sum}')
 
     if [ -z "$TOTAL_BYTES" ]; then
         TOTAL_BYTES=0
     fi
 
-    # Check if the aggregate match data flow clears your strict 10,000-byte structural limit
+    # Check if the aggregate match data flow clears your strict 10,000-byte limit
     if [ "$TOTAL_BYTES" -gt "$BYTE_THRESHOLD" ]; then
         
+        # STRUCTURAL /24 RANGE CONVERSION
+        # Cuts off the last octet and appends .0/24 (e.g., 185.34.107.42 -> 185.34.107.0/24)
+        SUBNET_24=$(echo "$SERVER_IP" | sed 's/\.[0-9]*$/\.0\/24/')
+        
         # Flash storage protection check before promoting to the Pending ledger
-        if ! grep -q "^$SERVER_IP" "$PENDING_FILE" 2>/dev/null; then
-            echo "$SERVER_IP" >> "$PENDING_FILE"
+        if ! grep -q "^$SUBNET_24" "$PENDING_FILE" 2>/dev/null; then
+            echo "$SUBNET_24" >> "$PENDING_FILE"
             
-            # Print success line with colorized status metrics to the command dashboard
-            printf "🚀 %-16s | %-12s | \033[0;36m%-12s\033[0m | LOGGED TO PENDING\n" \
-                "$SERVER_IP" "$TOTAL_BYTES" "[ASSURED]"
+            # Print success line with the converted /24 subnet highlighted
+            printf "🚀 %-16s | %-12s | \033[0;36m%-12s\033[0m | Converted: \033[0;32m%s\033[0m\n" \
+                "$SERVER_IP" "$TOTAL_BYTES" "[ASSURED]" "$SUBNET_24"
         fi
     fi
 done
-Use code with caution.
-
-
