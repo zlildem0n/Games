@@ -16,10 +16,10 @@ MAX_LATENCY=70
 
 touch "$MASTER_FILE" "$DUMP_FILE" "$US_ONLY_FILE" "$PRE_PEND_POOL" "$LOW_LAT_POOL" "$HIGH_LAT_POOL" "$UNPING_POOL" "$OFFICIAL_POOL"
 
-# Native utility tool to verify if a port falls inside the 30000:45000 block
+# Native utility tool to verify if a port falls inside the 30000:50000 block
 port_in_range() {
     local chk_port=$1
-    if [ "$chk_port" -ge 30000 ] && [ "$chk_port" -le 45000 ]; then return 0; fi
+    if [ "$chk_port" -ge 30000 ] && [ "$chk_port" -le 50000 ]; then return 0; fi
     return 1
 }
 
@@ -78,7 +78,7 @@ while true; do
                 continue
             fi
 
-            # CONDITION 2: Block 30000:45000 drops into PRE-PENDING folder first
+            # CONDITION 2: Block 30000:50000 drops into PRE-PENDING folder first
             if port_in_range "$DPORT" || port_in_range "$SPORT"; then
                 sed -i "\|^$TARGET_IP|d" "$US_ONLY_FILE" 2>/dev/null
                 echo "$TARGET_IP" >> "$PRE_PEND_POOL"
