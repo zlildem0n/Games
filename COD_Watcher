@@ -1,4 +1,7 @@
 #!/bin/sh
+# ==============================================================================
+# SCRIPT 1: STUN-TRIGGERED PATTERN WATCHER (FIXED STRIP PATH)
+# ==============================================================================
 XBOX_PORT="49806"
 DUMP_FILE="/root/COD_Dump.txt"
 VERIFY_SCRIPT="/root/cod_verify.sh"
@@ -33,4 +36,3 @@ tcpdump -i eth4 -n -l "udp port $XBOX_PORT" 2>/dev/null | while read -r tripwire
         fi
     fi
 done
-
