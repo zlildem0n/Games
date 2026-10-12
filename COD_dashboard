@@ -1,7 +1,7 @@
 cat << 'EOF' > /root/cod_scoreboard.sh
 #!/bin/sh
 # ==============================================================================
-# SCRIPT 5: VISUAL SCOREBOARD COCKPIT - HARDENED PRODUCTION BUILD
+# SCRIPT 5: VISUAL SCOREBOARD COCKPIT - STABILIZED PRODUCTION BUILD
 # ==============================================================================
 
 clear
@@ -10,19 +10,19 @@ echo "=============================================="
 
 # 1. PROCESS MONITOR: Verify background engines are online in system memory
 if ps w | grep -v grep | grep -q "cod_watcher.sh"; then
-    STATUS_WATCHER="\033[0;32m[ ACTIVE ]\033[0m"
+    STATUS_WATCHER="[ ACTIVE ]"
 else
-    STATUS_WATCHER="\033[0;31m[ INACTIVE ]\033[0m"
+    STATUS_WATCHER="[ INACTIVE ]"
 fi
 
 if ps w | grep -v grep | grep -q -E "cod_failsafe.sh|cod_latency_audit.sh"; then
-    STATUS_AUDITOR="\033[0;32m[ ACTIVE ]\033[0m"
+    STATUS_AUDITOR="[ ACTIVE ]"
 else
-    STATUS_AUDITOR="\033[0;31m[ INACTIVE ]\033[0m"
+    STATUS_AUDITOR="[ INACTIVE ]"
 fi
 
-printf "  Packet Watcher:     %b\n" "$STATUS_WATCHER"
-printf "  Latency Auditor:    %b\n" "$STATUS_AUDITOR"
+printf "  Packet Watcher:     %s\n" "$STATUS_WATCHER"
+printf "  Latency Auditor:    %s\n" "$STATUS_AUDITOR"
 echo "----------------------------------------------"
 
 # 2. SECTIONS MONITOR: Print tally tracking rows matching your actual data pathways
@@ -38,3 +38,6 @@ echo "----------------------------------------------"
 echo "  Total Logs:         $(wc -l < /root/COD_Master.txt 2>/dev/null || echo 0)"
 echo "=============================================="
 EOF
+sed -i 's/\r//g' /root/cod_scoreboard.sh && chmod 755 /root/cod_scoreboard.sh
+sync
+echo "[*] Local scoreboard file successfully stabilized!"
