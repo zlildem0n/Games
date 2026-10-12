@@ -1,6 +1,7 @@
+cat << 'EOF' > /root/cod_failsafe.sh
 #!/bin/sh
 # ==============================================================================
-# SCRIPT 4: LATENCY ENGINE - DATA-GATED AUDITOR WITH POST-PENDING RANGE SCAN
+# SCRIPT 4: LATENCY ENGINE - PRE-PENDING TO PENDING WITH FIXED AWK STREAM PARSING
 # ==============================================================================
 MASTER_FILE="/root/COD_Master.txt"
 DUMP_FILE="/root/COD_Dump.txt"
@@ -115,7 +116,6 @@ while true; do
             PENDING_IP=$(echo "$state_line" | grep -oE 'dst=[0-9.]+' | awk -F= '{print $2}' | head -n1)
             if grep -q "^$PENDING_IP" "$LOW_LAT_POOL" 2>/dev/null; then
                 
-                # 🎯 INJECTION POINT: CRITICAL POST-PENDING ACTIVE RANGE SCAN
                 SUBNET_BASE=$(echo "$PENDING_IP" | cut -d. -f1-3)
                 WAN_IP=$(ip -4 route get 1.1.1.1 2>/dev/null | grep -oE 'src [0-9.]+' | awk '{print $2}')
                 [ -z "$WAN_IP" ] && WAN_IP="0.0.0.0"
@@ -123,7 +123,7 @@ while true; do
                 MIN_PING=999
                 RESPONSES_FOUND=0
                 
-                # Parallel asynchronous ping burst array (.1, .10, .25, .50)
+                # FIXED: Restored complete curly braces inside awk print evaluation string blocks
                 for host_node in 1 10 25 50; do
                     (
                         test_ip="${SUBNET_BASE}.${host_node}"
@@ -139,7 +139,6 @@ while true; do
                 sleep 0.4
                 wait
                 
-                # Evaluate results array for responsiveness and latency values
                 while read -r probe_line; do
                     [ -z "$probe_line" ] && continue
                     status=$(echo "$probe_line" | cut -d: -f1)
@@ -163,10 +162,8 @@ while true; do
 
                 # STEP B: EVALUATE REAL PHYSICAL LATENCY ACCURACY
                 if [ "$MIN_PING" -le "$MAX_LATENCY" ] && [ "$MIN_PING" -ne 999 ]; then
-                    # Passed telemetry, payload, and range-ping floor benchmarks -> Trigger Whitelist Promotion
                     if [ -x "$PROMOTER_SCRIPT" ]; then "$PROMOTER_SCRIPT" & fi
                 else
-                    # Failed real distance rule check (Too far away from East Coast/Chicago parameters)
                     sed -i "\|^$PENDING_IP|d" "$LOW_LAT_POOL" 2>/dev/null
                     sed -i "\|^$PENDING_IP|d" "$MASTER_FILE" 2>/dev/null
                     echo "$PENDING_IP" >> "$HIGH_LAT_POOL"
@@ -183,4 +180,4 @@ while true; do
     sort -u "$UNPING_POOL" -o "$UNPING_POOL" 2>/dev/null
     sleep 5
 done
-
+EOF
