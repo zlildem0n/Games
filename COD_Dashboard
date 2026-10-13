@@ -1,6 +1,6 @@
 #!/bin/sh
 # ==============================================================================
-# SCRIPT 8: SCOREBOARD PANEL MONITOR (5-STAGE MATRIX UPDATE)
+# SCRIPT 8: SCOREBOARD PANEL MONITOR (CLEAN 5-STAGE PIPELINE MATRIX)
 # ==============================================================================
 DUMP="/root/COD_Dump.txt"; PRE="/root/COD_Pre_Pending.txt"; PEND="/root/COD_Pending.txt"
 POST="/root/COD_Post_Pending.txt"; BLOCK="/root/COD_Blocked.txt"; MAST="/root/COD_Master.txt"
