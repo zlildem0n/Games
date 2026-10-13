@@ -1,6 +1,6 @@
 #!/bin/sh
 # ==============================================================================
-# SCRIPT 2: DYNAMIC GEOGRAPHIC SCANNER ENGINE - GLOBAL SYSTEM MMDB (BETA 3.3)
+# SCRIPT 2: DYNAMIC GEOGRAPHIC SCANNER ENGINE - GLOBAL SYSTEM MMDB (BETA 3.6)
 # ==============================================================================
 DUMP_FILE="/root/COD_Dump.txt"
 PRE_PENDING_FILE="/root/COD_Pre_Pending.txt"
@@ -14,8 +14,14 @@ touch "$PRE_PENDING_FILE" "$BLOCKED_FILE"
 
 echo "--- LIVE STAGE 2 GLOBAL SYSTEM GEOGRAPHIC FILTER CORE ONLINE ---"
 
-tail -f -n +1 "$DUMP_FILE" | while read -r SERVER_IP; do
+# FIXED: Added 'awk' unbuffered flush to bypass the Linux kernel stream bottleneck entirely
+tail -f -n +1 "$DUMP_FILE" | awk '{print $0; fflush()}' | while read -r RAW_IP; do
+    [ -z "$RAW_IP" ] && continue
+    
+    # FIXED: Strip all hidden trailing carriage returns (\r), spaces, and line breaks instantly
+    SERVER_IP=$(echo "$RAW_IP" | tr -d '[:space:]' | tr -d '\r')
     [ -z "$SERVER_IP" ] && continue
+    
     SUBNET_24=$(echo "$SERVER_IP" | sed 's/\.[0-9]*$/\.0\/24/')
 
     if grep -q "^$SERVER_IP" "$PRE_PENDING_FILE" 2>/dev/null || grep -q "^$SUBNET_24" "$BLOCKED_FILE" 2>/dev/null; then
@@ -27,7 +33,10 @@ tail -f -n +1 "$DUMP_FILE" | while read -r SERVER_IP; do
     [ -z "$COUNTRY" ] && COUNTRY="US"
 
     if [ "$COUNTRY" != "US" ]; then
-        echo "$SUBNET_24 | Note: [Foreign Banned]" >> "$BLOCKED_FILE" && continue
+        if ! grep -q "^$SUBNET_24" "$BLOCKED_FILE" 2>/dev/null; then
+            echo "$SUBNET_24 | Note: [Foreign Banned] ($COUNTRY)" >> "$BLOCKED_FILE"
+        fi
+        continue
     fi
 
     # 2. State Region Lookup - Reading cleanly from the system database layer
@@ -42,10 +51,12 @@ tail -f -n +1 "$DUMP_FILE" | while read -r SERVER_IP; do
     # 4. Cross-reference your clean configuration list file records dynamically
     IS_ALLOWED=0
     if [ -f "$CONFIG_LIST" ]; then
-        if grep -qi "^$CITY$" "$CONFIG_LIST" 2>/dev/null; then
+        CLEANED_LIST=$(sed 's/#.*//' "$CONFIG_LIST" | sed 's/[[:space:]]*$//' | grep -v '^$')
+        
+        if echo "$CLEANED_LIST" | grep -qi "^$CITY$"; then
             IS_ALLOWED=1
             [ "$REGION" = "UNK" ] && REGION="MAPPED"
-        elif grep -qi "^$REGION$" "$CONFIG_LIST" 2>/dev/null; then
+        elif echo "$CLEANED_LIST" | grep -qi "^$REGION$"; then
             IS_ALLOWED=1
         elif [ "$REGION" = "UNK" ] && [ "$CITY" = "UnknownCity" ]; then
             IS_ALLOWED=1
