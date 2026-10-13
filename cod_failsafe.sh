@@ -1,6 +1,6 @@
 #!/bin/sh
 # ==============================================================================
-# SCRIPT 7: GEOGRAPHIC-FIRST MAXMIND FILTER & BATCH ICMP PIPELINE (BETA 2.0)
+# SCRIPT 7: GEOGRAPHIC-FIRST MAXMIND FILTER & BATCH ICMP PIPELINE (FIXED STRING MATCH)
 # ==============================================================================
 PENDING_FILE="/root/COD_Pending.txt"
 POST_PENDING_FILE="/root/COD_Post_Pending.txt"
@@ -32,10 +32,12 @@ tail -f -n +1 "$PENDING_FILE" | while read -r line; do
     # STAGE 1: GEOGRAPHIC PRE-FILTER (MAXMIND FIRST)
     # ==========================================================================
     TEST_IP="${NET_PREFIX}.1"
-    REGION=$(mmdblookup --file "$MMDB_FILE" --ip "$TEST_IP" subdivisions 0 iso_code 2>/dev/null | grep -oE '"[A-Z]{2}"' | tr -d '"')
+    
+    # FIXED: Added 'tr -d' patterns to cleanly strip tabs, newlines, and hidden trailing spaces
+    REGION=$(mmdblookup --file "$MMDB_FILE" --ip "$TEST_IP" subdivisions 0 iso_code 2>/dev/null | grep -oE '"[A-Z]{2}"' | tr -d '"' | tr -d '[:space:]')
     [ -z "$REGION" ] && REGION="UNK"
 
-    # MULTI-CONSOLE MATCH ZONE: Expanded profile list includes GA (Georgia / Atlanta)
+    # Strict Allowed Gaming States Filter Gate
     if [ "$REGION" != "NJ" ] && [ "$REGION" != "NY" ] && [ "$REGION" != "PA" ] && [ "$REGION" != "IL" ] && [ "$REGION" != "VA" ] && [ "$REGION" != "OH" ] && [ "$REGION" != "GA" ]; then
         # ❌ REJECTED: Server is physically located far away. Block it instantly without pinging!
         if ! grep -q "^$SUBNET_24" "$BLOCKED_FILE" 2>/dev/null; then
