@@ -1,6 +1,7 @@
+cat << 'EOF' > /root/cod_geo_scanner.sh
 #!/bin/sh
 # ==============================================================================
-# SCRIPT 2: GEOGRAPHIC FILTER CORE (STAGE 2 ARCHITECTURE)
+# SCRIPT 2: DYNAMIC GEOGRAPHIC SCANNER ENGINE - WHITE-SPACE STRIPPED (BETA 3.1)
 # ==============================================================================
 DUMP_FILE="/root/COD_Dump.txt"
 PRE_PENDING_FILE="/root/COD_Pre_Pending.txt"
@@ -11,6 +12,7 @@ MMDB_FILE="/root/GeoLite2-City.mmdb"
 touch "$PRE_PENDING_FILE" "$BLOCKED_FILE"
 
 echo "--- LIVE STAGE 2 GEOGRAPHIC FILTER CORE ONLINE ---"
+
 tail -f -n +1 "$DUMP_FILE" | while read -r SERVER_IP; do
     [ -z "$SERVER_IP" ] && continue
     SUBNET_24=$(echo "$SERVER_IP" | sed 's/\.[0-9]*$/\.0\/24/')
@@ -19,27 +21,45 @@ tail -f -n +1 "$DUMP_FILE" | while read -r SERVER_IP; do
         continue
     fi
 
-    # Country and location parsing blocks
+    # 1. Country code validation check
     COUNTRY=$(mmdblookup --file "$MMDB_FILE" --ip "$SERVER_IP" country iso_code 2>/dev/null | grep -oE '"[A-Z]{2}"' | tr -d '"' | tr -d '[:space:]')
     [ -z "$COUNTRY" ] && COUNTRY="US"
 
     if [ "$COUNTRY" != "US" ]; then
-        echo "$SUBNET_24 | Note: [Foreign]" >> "$BLOCKED_FILE" && continue
+        echo "$SUBNET_24 | Note: [Foreign Banned]" >> "$BLOCKED_FILE" && continue
     fi
 
+    # 2. State Region Lookup - FIXED: Added 'tr -d [:space:]' to drop hidden \n breaks
     REGION=$(mmdblookup --file "$MMDB_FILE" --ip "$SERVER_IP" subdivisions 0 iso_code 2>/dev/null | grep -oE '"[A-Z]{2}"' | tr -d '"' | tr -d '[:space:]')
     [ -z "$REGION" ] && REGION="UNK"
-    CITY=$(mmdblookup --file "$MMDB_FILE" --ip "$SERVER_IP" city names en 2>/dev/null | grep -oE '"[^"]+"' | tr -d '"' | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
+
+    # 3. City Lookup - FIXED: Cleans padding for multi-word cities cleanly
+    CITY=$(mmdblookup --file "$MMDB_FILE" --ip "$SERVER_IP" city names en 2>/dev/null | grep -oE '"[^"]+"' | tr -d '"')
+    CITY=$(echo "$CITY" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
     [ -z "$CITY" ] && CITY="UnknownCity"
 
+    # 4. Cross-reference your clean list file records dynamically
     IS_ALLOWED=0
-    if grep -qi "^$CITY$" "$CONFIG_LIST" 2>/dev/null || grep -qi "^$REGION$" "$CONFIG_LIST" 2>/dev/null || [ "$REGION" = "UNK" ]; then
+    if [ -f "$CONFIG_LIST" ]; then
+        if grep -qi "^$CITY$" "$CONFIG_LIST" 2>/dev/null; then
+            IS_ALLOWED=1
+            [ "$REGION" = "UNK" ] && REGION="MAPPED"
+        elif grep -qi "^$REGION$" "$CONFIG_LIST" 2>/dev/null; then
+            IS_ALLOWED=1
+        elif [ "$REGION" = "UNK" ] && [ "$CITY" = "UnknownCity" ]; then
+            IS_ALLOWED=1
+        fi
+    else
         IS_ALLOWED=1
     fi
 
     if [ "$IS_ALLOWED" -eq 1 ]; then
+        # 🟢 GEOPASS: Matches your list, passes down the pipeline to Stage 3 conntrack promoter
         echo "$SERVER_IP" >> "$PRE_PENDING_FILE"
     else
-        echo "$SUBNET_24 | Note: [Distant Banned ($CITY, $REGION)]" >> "$BLOCKED_FILE"
+        # ❌ GEOBLOCK: Outside your dynamic profile text list definitions
+        if ! grep -q "^$SUBNET_24" "$BLOCKED_FILE" 2>/dev/null; then
+            echo "$SUBNET_24 | Note: [Distant Zone Banned] ($CITY, $REGION)" >> "$BLOCKED_FILE"
+        fi
     fi
 done
