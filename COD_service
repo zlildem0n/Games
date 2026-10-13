@@ -1,84 +1,43 @@
 #!/bin/sh
 # ==============================================================================
-# SCRIPT 9: SYSTEM SERVICE ORCHESTRATION LAYER (BACKGROUND DAEMON CONTROL)
+# SCRIPT 11: REORDERED 4-TIER BACKGROUND SERVICE DAEMON CONTROLLER (BETA 3.0)
 # ==============================================================================
-
-# Define our core core executable modules
-DAEMONS="cod_watcher.sh cod_promoter.sh cod_failsafe.sh"
-
-start_services() {
-    echo "[*] Initializing Call of Duty Framework Background Daemons..."
-    for script in $DAEMONS; do
-        if [ ! -f "/root/$script" ]; then
-            echo " -> ❌ Error: /root/$script is missing. Run COD_Updater first."
-            continue
-        fi
-
-        # Check if this specific module is already active in background memory
-        PID=$(pgrep -f "sh /root/$script")
-        if [ -n "$PID" ]; then
-            echo " -> ⚠️  Notice: $script is already running silently (PID: $PID)"
-        else
-            # Launch the script into the background detached safely via nohup
-            nohup sh "/root/$script" > /dev/null 2>&1 &
-            sleep 0.5
-            NEW_PID=$(pgrep -f "sh /root/$script")
-            echo " -> 🟢 Launched: $script safely into system background (PID: $NEW_PID)"
-        fi
-    done
-    echo "[+] All background workflows synchronized."
-}
-
-stop_services() {
-    echo "[*] Terminating Call of Duty Framework Background Daemons..."
-    for script in $DAEMONS; do
-        PID=$(pgrep -f "sh /root/$script")
-        if [ -n "$PID" ]; then
-            kill -9 $PID >/dev/null 2>&1
-            echo " -> 🛑 Terminated: $script background session (Wiped PID: $PID)"
-        else
-            echo " -> ℹ️  Inactive: $script was not running in memory."
-        fi
-    done
-    echo "[+] System background spaces cleared."
-}
-
-check_status() {
-    echo "================================================================================"
-    echo "            📋 SYSTEM CORE CONSOLE WORKING SERVICE METRICS MATRIX"
-    echo "================================================================================"
-    for script in $DAEMONS; do
-        PID=$(pgrep -f "sh /root/$script")
-        if [ -n "$PID" ]; then
-            printf "  %-20s : \033[0;32m%-15s\033[0m (Active Process ID: %s)\n" "$script" "ONLINE" "$PID"
-        else
-            printf "  %-20s : \033[0;31m%-15s\033[0m (No Active Background Session)\n" "$script" "OFFLINE"
-        fi
-    done
-    echo "================================================================================"
-}
-
-# Evaluate the command argument flag passed by the user
 case "$1" in
     start)
-        start_services
+        echo "[*] Initializing Call of Duty 5-Stage Pipelines..."
+        /root/cod_watcher.sh >/dev/null 2>&1 &
+        /root/cod_geo_scanner.sh >/dev/null 2>&1 &
+        /root/cod_promoter.sh >/dev/null 2>&1 &
+        /root/cod_volume_filter.sh >/dev/null 2>&1 &
+        echo "[+] All background pipelines running safely ONLINE."
         ;;
     stop)
-        stop_services
-        ;;
-    status)
-        check_status
+        echo "[*] Terminating Call of Duty Background Daemons..."
+        pgrep -f "cod_watcher.sh" | xargs kill -9 2>/dev/null
+        pgrep -f "cod_geo_scanner.sh" | xargs kill -9 2>/dev/null
+        pgrep -f "cod_promoter.sh" | xargs kill -9 2>/dev/null
+        pgrep -f "cod_volume_filter.sh" | xargs kill -9 2>/dev/null
+        echo "[+] System background spaces cleared."
         ;;
     restart)
-        stop_services
-        sleep 1
-        start_services
+        $0 stop && sleep 1 && $0 start
+        ;;
+    status)
+        echo "================================================================================"
+        echo "            📋 SYSTEM CORE CONSOLE WORKING SERVICE METRICS MATRIX"
+        echo "================================================================================"
+        pid_w=$(pgrep -f "cod_watcher.sh" | tr '\n' ' ')
+        pid_g=$(pgrep -f "cod_geo_scanner.sh" | tr '\n' ' ')
+        pid_p=$(pgrep -f "cod_promoter.sh" | tr '\n' ' ')
+        pid_v=$(pgrep -f "cod_volume_filter.sh" | tr '\n' ' ')
+        printf "  cod_watcher.sh       : %s (PID: %s)\n" "${pid_w:+ONLINE}${pid_w:-OFFLINE}" "${pid_w:-N/A}"
+        printf "  cod_geo_scanner.sh   : %s (PID: %s)\n" "${pid_g:+ONLINE}${pid_g:-OFFLINE}" "${pid_g:-N/A}"
+        printf "  cod_promoter.sh      : %s (PID: %s)\n" "${pid_p:+ONLINE}${pid_p:-OFFLINE}" "${pid_p:-N/A}"
+        printf "  cod_volume_filter.sh : %s (PID: %s)\n" "${pid_v:+ONLINE}${pid_v:-OFFLINE}" "${pid_v:-N/A}"
+        echo "================================================================================"
         ;;
     *)
-        echo "================================================================================"
-        echo " 🛠️  COD OPERATIONAL SERVICE INFRASTRUCTURE INTERFACE MANAGER"
-        echo "================================================================================"
-        echo " Usage Command Options: /root/COD_service [start|stop|restart|status]"
-        echo "================================================================================"
+        echo "Usage: $0 {start|stop|restart|status}"
+        exit 1
         ;;
 esac
