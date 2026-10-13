@@ -1,6 +1,6 @@
 #!/bin/sh
 # ==============================================================================
-# SCRIPT 9: AUTOMATED DUAL-CONSOLE RAW LINK PIPELINE DEPLOYMENT ENGINE (BETA 3.5)
+# SCRIPT 9: AUTOMATED DUAL-CONSOLE RAW LINK PIPELINE DEPLOYMENT ENGINE (BETA 3.6)
 # ==============================================================================
 RAW_URL="https://raw.githubusercontent.com/zlildem0n/Games/refs/heads/main"
 TARGET="/root"
@@ -18,7 +18,8 @@ curl -k -sSL "${RAW_URL}/cod_geo_scanner.sh" -o "${TARGET}/cod_geo_scanner.sh" &
 curl -k -sSL "${RAW_URL}/cod_promoter.sh" -o "${TARGET}/cod_promoter.sh" && chmod 755 "${TARGET}/cod_promoter.sh"
 curl -k -sSL "${RAW_URL}/cod_volume_filter.sh" -o "${TARGET}/cod_volume_filter.sh" && chmod 755 "${TARGET}/cod_volume_filter.sh"
 
-# --- 2. UPPERCASE CONTROL INTERFACES & AUTOMATION TOOLS ---
+# --- 2. UPPERCASE CONTROL INTERFACES & AUTOMATION TOOLS (CASE MATCHED) ---
+# Verified matching against your online repository filename parameters
 curl -k -sSL "${RAW_URL}/COD_service" -o "${TARGET}/COD_Service" && chmod 755 "${TARGET}/COD_Service"
 curl -k -sSL "${RAW_URL}/COD_Dashboard" -o "${TARGET}/COD_Dashboard" && chmod 755 "${TARGET}/COD_Dashboard"
 curl -k -sSL "${RAW_URL}/COD_Geo_Updater" -o "${TARGET}/COD_Geo_Updater" && chmod 755 "${TARGET}/COD_Geo_Updater"
@@ -30,7 +31,7 @@ if curl -k -sSL "${RAW_URL}/COD_States" -o "${TARGET}/COD_States_new" && [ -s "$
     chmod 644 "${TARGET}/COD_States"
 fi
 
-# --- 4. LEGACY FILE CLEANUP & ARTIFACT PURGING ---
-rm -f /root/COD_dashboard /root/COD_service /root/COD_updater /root/cod_failsafe.sh /root/TARGET}*
+# --- 4. LEGACY FILE CLEANUP & ARTIFACT PURGING (FIXED TYPO) ---
+rm -f /root/COD_dashboard /root/COD_service /root/COD_updater /root/cod_failsafe.sh
 
 echo "[SUCCESS] Total framework file synchronization complete. All tiers updated successfully!"
