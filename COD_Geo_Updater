@@ -4,7 +4,7 @@
 # ==============================================================================
 
 # ⚠️ PASTE YOUR EXACT RAW GEOLITE2-CITY.MMDB GITHUB URL HERE:
-GEO_URL="https://githubusercontent.com"
+GEO_URL="https://git.io/GeoLite2-City.mmdb"
 
 TARGET_DIR="/root"
 TARGET_FILE="GeoLite2-City.mmdb"
