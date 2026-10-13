@@ -1,4 +1,3 @@
-cat << 'EOF' > /root/cod_geo_scanner.sh
 #!/bin/sh
 # ==============================================================================
 # SCRIPT 2: DYNAMIC GEOGRAPHIC SCANNER ENGINE - WHITE-SPACE STRIPPED (BETA 3.1)
