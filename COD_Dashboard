@@ -1,43 +1,45 @@
 #!/bin/sh
 # ==============================================================================
-# SCRIPT 8: SCOREBOARD PANEL MONITOR (CLEAN 5-STAGE PIPELINE MATRIX)
+# SCRIPT 5: PIPELINE MONITOR (IMPROVED)
 # ==============================================================================
-DUMP="/root/COD_Dump.txt"; PRE="/root/COD_Pre_Pending.txt"; PEND="/root/COD_Pending.txt"
-POST="/root/COD_Post_Pending.txt"; BLOCK="/root/COD_Blocked.txt"; MAST="/root/COD_Master.txt"
+DUMP="/root/COD_Dump.txt"
+PRE="/root/COD_Pre_Pending.txt"
+PEND="/root/COD_Pending.txt"
+POST="/root/COD_Post_Pending.txt"
+BLOCK="/root/COD_Blocked.txt"
+MAST="/root/COD_Master.txt"
+
+status() {
+    if pgrep -f "$1" >/dev/null 2>&1; then
+        printf "\033[0;32mONLINE\033[0m"
+    else
+        printf "\033[0;31mOFFLINE\033[0m"
+    fi
+}
+
+count_lines() {
+    [ -f "$1" ] && wc -l < "$1" 2>/dev/null | tr -d ' ' || echo 0
+}
 
 clear
 while true; do
     printf "\033[H"
-    cnt_dump=$(wc -l "$DUMP" 2>/dev/null | awk '{print $1}')
-    cnt_pre=$(wc -l "$PRE" 2>/dev/null | awk '{print $1}')
-    cnt_pend=$(wc -l "$PEND" 2>/dev/null | awk '{print $1}')
-    cnt_post=$(wc -l "$POST" 2>/dev/null | awk '{print $1}')
-    cnt_block=$(wc -l "$BLOCK" 2>/dev/null | awk '{print $1}')
-    cnt_mast=$(wc -l "$MAST" 2>/dev/null | awk '{print $1}')
-
-    stat_w=$(pgrep -f "cod_watcher.sh" >/dev/null && echo "\033[0;32mONLINE\033[0m" || echo "\033[0;31mOFFLINE\033[0m")
-    stat_g=$(pgrep -f "cod_geo_scanner.sh" >/dev/null && echo "\033[0;32mONLINE\033[0m" || echo "\033[0;31mOFFLINE\033[0m")
-    stat_p=$(pgrep -f "cod_promoter.sh" >/dev/null && echo "\033[0;32mONLINE\033[0m" || echo "\033[0;31mOFFLINE\033[0m")
-    stat_v=$(pgrep -f "cod_volume_filter.sh" >/dev/null && echo "\033[0;32mONLINE\033[0m" || echo "\033[0;31mOFFLINE\033[0m")
-
     echo "================================================================================"
-    echo "         🛡️  CALL OF DUTY HIGH-SPEED 5-STAGE PIPELINE MONITOR 🛡️          "
+    echo "         CALL OF DUTY 5-STAGE PIPELINE MONITOR"
     echo "================================================================================"
-    echo " TIME SNAPSHOT : $(date '+%Y-%m-%d %H:%M:%S')"
+    echo " TIME : $(date '+%Y-%m-%d %H:%M:%S')"
     echo "--------------------------------------------------------------------------------"
-    echo "  ⚙️  BACKGROUND DAEMON RUN-STATES:"
-    printf "  • Watcher Sniper Engine : %s | • Geo Scanner Filter (S2) : %s\n" "$stat_w" "$stat_g"
-    printf "  • Handshake Promoter(S3): %s | • Volume 10K Filter (S4)  : %s\n" "$stat_p" "$stat_v"
+    printf "  Watcher          : %s\n" "$(status cod_watcher.sh)"
+    printf "  Geo Scanner      : %s\n" "$(status cod_geo_scanner.sh)"
+    printf "  Handshake Promoter: %s\n" "$(status cod_promoter.sh)"
+    printf "  Volume Filter    : %s\n" "$(status cod_volume_filter.sh)"
     echo "--------------------------------------------------------------------------------"
-    echo "  [+] STAGE 1: Live Snipped Queue (COD_Dump.txt)          : ${cnt_dump:-0} IPs"
-    echo "  [+] STAGE 2: Allowed Geolocation (COD_Pre_Pending.txt)  : ${cnt_pre:-0} IPs"
-    echo "  [+] STAGE 3: Handshake Verified (COD_Pending.txt)      : ${cnt_pend:-0} IPs"
-    echo "--------------------------------------------------------------------------------"
-    echo "  📊 VALIDATION MATRICES & PROMOTIONS:"
-    printf "  🟢 Stage 4 Approved Optimal   (COD_Post_Pending.txt)    : \033[0;32m%s /24 Blocks\033[0m\n" "${cnt_post:-0}"
-    printf "  ❌ Distant Region Exclusions  (COD_Blocked.txt)         : \033[0;31m%s /24 Blocks\033[0m\n" "${cnt_block:-0}"
-    echo "--------------------------------------------------------------------------------"
-    echo "  🏢 Stage 5 Master History Pool (COD_Master.txt)         : ${cnt_mast:-0} Total Entries"
+    echo "  Stage 1 Dump          : $(count_lines "$DUMP") IPs"
+    echo "  Stage 2 Pre-Pending   : $(count_lines "$PRE") IPs"
+    echo "  Stage 3 Pending       : $(count_lines "$PEND") IPs"
+    echo "  Stage 4 Post-Pending  : $(count_lines "$POST") /24 blocks"
+    echo "  Blocked               : $(count_lines "$BLOCK") /24 blocks"
+    echo "  Master History        : $(count_lines "$MAST") entries"
     echo "================================================================================"
     sleep 2
 done
