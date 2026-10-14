@@ -1,30 +1,40 @@
 #!/bin/sh
 # ==============================================================================
-# SCRIPT 1: RAW NETWORK SNIPER (DUAL CONSOLE WORKSTATION UPDATE)
+# SCRIPT 1: RAW NETWORK SNIPER (IMPROVED)
 # ==============================================================================
 DUMP_FILE="/root/COD_Dump.txt"
 INTERFACE="eth4"
+PORTS="49806 or 49290"
+MAX_LINES=50000          # prevent unbounded growth
 
-# MULTI-CONSOLE EXPANSION: Captures both primary and secondary console ports
-FILTER_RULE="udp port 49806 or udp port 49290"
+# Ensure file exists
+touch "$DUMP_FILE" 2>/dev/null
+chmod 666 "$DUMP_FILE" 2>/dev/null
 
-if [ ! -f "$DUMP_FILE" ]; then
-    touch "$DUMP_FILE" && chmod 666 "$DUMP_FILE"
+# Simple size protection
+if [ -f "$DUMP_FILE" ]; then
+    lines=$(wc -l < "$DUMP_FILE" 2>/dev/null || echo 0)
+    if [ "$lines" -gt "$MAX_LINES" ]; then
+        tail -n $((MAX_LINES / 2)) "$DUMP_FILE" > "${DUMP_FILE}.tmp"
+        mv "${DUMP_FILE}.tmp" "$DUMP_FILE"
+    fi
 fi
 
 echo "--- LIVE RECONNAISSANCE PACKET SNIPER ACTIVE ---"
-echo "[*] Capturing real-time matchmaking handshakes on $INTERFACE..."
+echo "[*] Interface: $INTERFACE | Ports: $PORTS"
 echo "================================================================================"
 
-# Execute stream parsing with line buffering forced (-l) to feed Stage 2 instantly
-tcpdump -i "$INTERFACE" -nn -l "$FILTER_RULE" 2>/dev/null | awk '{
-    # Isolate inbound server source address fields cleanly
-    for(i=1;i<=NF;i++) {
-        if($i ~ /^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$/ && $(i-1) == ">") {
-            split($i, parts, ".")
-            ip = parts[1]"."parts[2]"."parts[3]"."parts[4]
-            print ip
-            fflush()
+# More reliable IP extraction
+tcpdump -i "$INTERFACE" -nn -l -q "udp and (port $PORTS)" 2>/dev/null | \
+awk '
+{
+    for (i = 1; i <= NF; i++) {
+        if ($i ~ /^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$/) {
+            # Prefer the side that is NOT the local console when possible
+            if ($(i-1) == ">" || $(i+1) ~ /^[0-9]+$/) {
+                print $i
+                fflush()
+            }
         }
     }
 }' >> "$DUMP_FILE"
