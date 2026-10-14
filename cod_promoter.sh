@@ -2,7 +2,7 @@
 # ==============================================================================
 # SCRIPT 3: HANDSHAKE PROMOTER (IMPROVED)
 # ==============================================================================
-PRE_PENDING_FILE="/root/COD_Pre_Pending.txt"
+PRE_PENDING_FILE="/root/COD_dump.txt"
 PENDING_FILE="/root/COD_Pending.txt"
 PORTS="49806|49290"
 MIN_PACKETS=12
