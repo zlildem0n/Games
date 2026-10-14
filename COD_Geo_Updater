@@ -1,47 +1,32 @@
 #!/bin/sh
 # ==============================================================================
-# WEEKLY MAXMIND GEOLITE2 CITY BINARY UPDATER (VERIFIED WORKING SOURCE)
+# WEEKLY MAXMIND GEOLITE2 CITY BINARY UPDATER (UNIFI SYSTEM PARSING FIX)
 # ==============================================================================
-
-# VERIFIED ACTIVE SOURCE: Daily community mirror that bypasses the dead git.io shortener path
 GEO_URL="https://git.io/GeoLite2-City.mmdb"
-
-TARGET_DIR="/root"
+TARGET_DIR="/usr/share/dpi/geoip"
 TARGET_FILE="GeoLite2-City.mmdb"
 
-# Verification Gate: Ensure network layer connectivity to GitHub before updating
 if ! curl -s --connect-timeout 5 https://github.com > /dev/null; then
     echo "[!] GitHub platform unreachable. Skipping scheduled database refresh."
     exit 1
 fi
 
-echo "[*] Synchronizing latest MaxMind geolocation database from verified repository..."
+mkdir -p "$TARGET_DIR"
 TMP_MMDB="/tmp/${TARGET_FILE}_new"
 
-# Download the raw binary layout using insecure and redirect headers (-k -L)
 if curl -k -sSL "$GEO_URL" -o "$TMP_MMDB" && [ -s "$TMP_MMDB" ]; then
-    # 1. Verify it is a real binary file and not a 404 HTML text page override
     if grep -q "html" "$TMP_MMDB" 2>/dev/null || grep -q "Not Found" "$TMP_MMDB" 2>/dev/null; then
         rm -f "$TMP_MMDB"
         echo "[!] Error: Captured an HTML error payload instead of binary data. Aborting sync."
         exit 1
     fi
 
-    # 2. Update your custom gaming script framework database path
+    # Force overwrite straight into the real UniFi OS DPI mapping layout directory
     mv -f "$TMP_MMDB" "${TARGET_DIR}/${TARGET_FILE}"
     chmod 644 "${TARGET_DIR}/${TARGET_FILE}"
-    echo "[+] Custom gaming database updated: ${TARGET_DIR}/${TARGET_FILE}"
-
-    # 3. Back up UniFi's native system database files if backups don't exist yet
-    [ -f /usr/share/GeoIP/GeoLite2-City.mmdb ] && [ ! -f /usr/share/GeoIP/GeoLite2-City.mmdb.bak ] && mv /usr/share/GeoIP/GeoLite2-City.mmdb /usr/share/GeoIP/GeoLite2-City.mmdb.bak
-    [ -f /var/lib/GeoIP/GeoLite2-City.mmdb ] && [ ! -f /var/lib/GeoIP/GeoLite2-City.mmdb.bak ] && mv /var/lib/GeoIP/GeoLite2-City.mmdb /var/lib/GeoIP/GeoLite2-City.mmdb.bak
-
-    # 4. OVERWRITE UNIFI SYSTEM GEOIP: Clone your database into all native paths
-    cp -f "${TARGET_DIR}/${TARGET_FILE}" /usr/share/GeoIP/GeoLite2-City.mmdb 2>/dev/null
-    cp -f "${TARGET_DIR}/${TARGET_FILE}" /var/lib/GeoIP/GeoLite2-City.mmdb 2>/dev/null
-    echo "[+] Global UniFi OS native system GeoIP maps successfully updated!"
+    echo "[SUCCESS] Global UniFi OS native system GeoIP maps successfully updated: ${TARGET_DIR}/${TARGET_FILE}"
 else
     rm -f "$TMP_MMDB"
-    echo "[!] Error: Failed to fetch binary payload. Verify your repository URL path."
+    echo "[!] Error: Failed to fetch binary payload from source repository."
     exit 1
 fi
