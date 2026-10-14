@@ -1,37 +1,35 @@
 #!/bin/sh
 # ==============================================================================
-# SCRIPT 9: AUTOMATED DUAL-CONSOLE RAW LINK PIPELINE DEPLOYMENT ENGINE (BETA 3.6)
+# AUTOMATED PIPELINE UPDATER (IMPROVED)
 # ==============================================================================
-RAW_URL="https://raw.githubusercontent.com/zlildem0n/Games/refs/heads/main"
+RAW_URL="https://raw.githubusercontent.com/zlildem0n/Games/main"
 TARGET="/root"
 
-if ! curl -k -s --connect-timeout 5 "$RAW_URL/COD_Updater" > /dev/null; then
-    echo "[!] GitHub unreachable. Cancelling sync loop."
+echo "[*] Checking GitHub..."
+if ! curl -k -s --connect-timeout 8 "$RAW_URL/COD_Updater" >/dev/null; then
+    echo "[!] GitHub unreachable."
     exit 1
 fi
 
-echo "[*] Synchronizing 5-stage framework assets individually via direct raw branch links..."
+echo "[*] Synchronizing scripts..."
 
-# --- 1. CORE BACKGROUND DAEMONS ---
-curl -k -sSL "${RAW_URL}/cod_watcher.sh" -o "${TARGET}/cod_watcher.sh" && chmod 755 "${TARGET}/cod_watcher.sh"
-curl -k -sSL "${RAW_URL}/cod_geo_scanner.sh" -o "${TARGET}/cod_geo_scanner.sh" && chmod 755 "${TARGET}/cod_geo_scanner.sh"
-curl -k -sSL "${RAW_URL}/cod_promoter.sh" -o "${TARGET}/cod_promoter.sh" && chmod 755 "${TARGET}/cod_promoter.sh"
-curl -k -sSL "${RAW_URL}/cod_volume_filter.sh" -o "${TARGET}/cod_volume_filter.sh" && chmod 755 "${TARGET}/cod_volume_filter.sh"
+# Core daemons
+for f in cod_watcher.sh cod_geo_scanner.sh cod_promoter.sh cod_volume_filter.sh; do
+    curl -k -sSL "${RAW_URL}/${f}" -o "${TARGET}/${f}" && chmod 755 "${TARGET}/${f}"
+done
 
-# --- 2. UPPERCASE CONTROL INTERFACES & AUTOMATION TOOLS (CASE MATCHED) ---
-# Verified matching against your online repository filename parameters
-curl -k -sSL "${RAW_URL}/COD_service" -o "${TARGET}/COD_Service" && chmod 755 "${TARGET}/COD_Service"
-curl -k -sSL "${RAW_URL}/COD_Dashboard" -o "${TARGET}/COD_Dashboard" && chmod 755 "${TARGET}/COD_Dashboard"
-curl -k -sSL "${RAW_URL}/COD_Geo_Updater" -o "${TARGET}/COD_Geo_Updater" && chmod 755 "${TARGET}/COD_Geo_Updater"
-curl -k -sSL "${RAW_URL}/COD_Updater" -o "${TARGET}/COD_Updater" && chmod 755 "${TARGET}/COD_Updater"
+# Control scripts
+for f in COD_service COD_Dashboard COD_Geo_Updater COD_Updater; do
+    curl -k -sSL "${RAW_URL}/${f}" -o "${TARGET}/${f}" && chmod 755 "${TARGET}/${f}"
+done
 
-# --- 3. DYNAMIC CONFIGURATION USER TEXT LISTS ---
-if curl -k -sSL "${RAW_URL}/COD_States" -o "${TARGET}/COD_States_new" && [ -s "${TARGET}/COD_States_new" ]; then
-    mv -f "${TARGET}/COD_States_new" "${TARGET}/COD_States"
+# Config list
+if curl -k -sSL "${RAW_URL}/COD_States" -o "${TARGET}/COD_States.new" && [ -s "${TARGET}/COD_States.new" ]; then
+    mv -f "${TARGET}/COD_States.new" "${TARGET}/COD_States"
     chmod 644 "${TARGET}/COD_States"
 fi
 
-# --- 4. LEGACY FILE CLEANUP & ARTIFACT PURGING (FIXED TYPO) ---
-rm -f /root/COD_dashboard /root/COD_service /root/COD_updater /root/cod_failsafe.sh
+# Cleanup old names
+rm -f /root/COD_dashboard /root/COD_service /root/COD_updater /root/cod_failsafe.sh 2>/dev/null
 
-echo "[SUCCESS] Total framework file synchronization complete. All tiers updated successfully!"
+echo "[SUCCESS] All scripts updated."
