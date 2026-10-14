@@ -1,52 +1,84 @@
 #!/bin/sh
 # ==============================================================================
-# SCRIPT 4: UNBUFFERED HEAVY VOLUME FILTER ENGINE (STAGE 4 ARCHITECTURE)
+# SCRIPT 4: HEAVY VOLUME FILTER (IMPROVED + DETAILED MASTER LIST)
 # ==============================================================================
 PENDING_FILE="/root/COD_Pending.txt"
 POST_PENDING_FILE="/root/COD_Post_Pending.txt"
 MASTER_FILE="/root/COD_Master.txt"
+MMDB_FILE="/usr/share/dpi/geoip/GeoLite2-City.mmdb"
+PORTS="49806|49290"
 BYTE_THRESHOLD=10000
+MAX_WAIT=20
 
-touch "$POST_PENDING_FILE" "$MASTER_FILE"
+touch "$POST_PENDING_FILE" "$MASTER_FILE" 2>/dev/null
 
-echo "--- LIVE STAGE 4 UNBUFFERED HEAVY VOLUME FILTER ENGINE ONLINE ---"
+echo "--- LIVE STAGE 4 VOLUME FILTER ONLINE ---"
 
-# FIXED: Added 'awk' flush rule to instantly push lines down the pipe without buffering lag
-tail -f -n +1 "$PENDING_FILE" | awk '{print $0; fflush()}' | while read -r RAW_IP; do
+get_conntrack() {
+    if command -v conntrack >/dev/null 2>&1; then
+        conntrack -L -p udp --dst "$1" 2>/dev/null | grep -E "sport=($PORTS)|dport=($PORTS)"
+    else
+        grep -E "udp.*$1" /proc/net/nf_conntrack 2>/dev/null | grep -E "sport=($PORTS)|dport=($PORTS)"
+    fi
+}
+
+# Helper to get clean location string
+get_location() {
+    ip="$1"
+    if [ ! -f "$MMDB_FILE" ]; then
+        echo "Unknown, UNK, XX"
+        return
+    fi
+
+    COUNTRY=$(mmdblookup --file "$MMDB_FILE" --ip "$ip" country iso_code 2>/dev/null \
+              | grep -oE '"[A-Z]{2}"' | tr -d '"' | head -1)
+    [ -z "$COUNTRY" ] && COUNTRY="XX"
+
+    REGION=$(mmdblookup --file "$MMDB_FILE" --ip "$ip" subdivisions 0 iso_code 2>/dev/null \
+             | grep -oE '"[A-Z]{2}"' | tr -d '"' | head -1)
+    [ -z "$REGION" ] && REGION="UNK"
+
+    CITY=$(mmdblookup --file "$MMDB_FILE" --ip "$ip" city names en 2>/dev/null \
+           | grep -oE '"[^"]+"' | tr -d '"' | head -1)
+    CITY=$(echo "$CITY" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
+    [ -z "$CITY" ] && CITY="Unknown"
+
+    echo "$CITY, $REGION, $COUNTRY"
+}
+
+tail -F -n +1 "$PENDING_FILE" 2>/dev/null | while read -r RAW_IP; do
     [ -z "$RAW_IP" ] && continue
-    
-    # Clean hidden whitespace artifacts off the IP address string instantly
-    SERVER_IP=$(echo "$RAW_IP" | tr -d '[:space:]' | tr -d '\r')
+    SERVER_IP=$(echo "$RAW_IP" | tr -d '[:space:]\r')
     [ -z "$SERVER_IP" ] && continue
-    
+
+    # Basic IP check
+    echo "$SERVER_IP" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$' || continue
+
     SUBNET_24=$(echo "$SERVER_IP" | sed 's/\.[0-9]*$/\.0\/24/')
-    grep -q "^$SUBNET_24" "$POST_PENDING_FILE" 2>/dev/null && continue
+    grep -q "^${SUBNET_24} " "$POST_PENDING_FILE" 2>/dev/null && continue
 
-    # FIXED: Check the traffic counter multiple times over a 15-second span 
-    # to catch the match data as it climbs toward 10K bytes!
-    check_cycle=1
-    while [ "$check_cycle" -le 15 ]; do
-        if [ -x "$(command -v conntrack)" ]; then
-            RAW_TRACK=$(conntrack -L -p udp --dst "$SERVER_IP" 2>/dev/null | grep -E "sport=(49806|49290)|dport=(49806|49290)")
-        else
-            RAW_TRACK=$(grep -E "udp.*$SERVER_IP" /proc/net/nf_conntrack 2>/dev/null | grep -E "sport=(49806|49290)|dport=(49806|49290)")
-        fi
-        
-        [ -z "$RAW_TRACK" ] && break # Exit if the lobby closed or disconnected
+    cycle=1
+    while [ "$cycle" -le "$MAX_WAIT" ]; do
+        RAW_TRACK=$(get_conntrack "$SERVER_IP")
+        [ -z "$RAW_TRACK" ] && break
 
-        TOTAL_BYTES=$(echo "$RAW_TRACK" | grep -oE 'bytes=[0-9]+' | cut -d'=' -f2 | awk '{sum+=$1} END {print sum}')
-        [ -z "$TOTAL_BYTES" ] && TOTAL_BYTES=0
+        TOTAL_BYTES=$(echo "$RAW_TRACK" | grep -oE 'bytes=[0-9]+' | cut -d= -f2 | \
+                     awk '{s+=$1} END {print s+0}')
+        TOTAL_BYTES=${TOTAL_BYTES:-0}
 
-        # 10,000+ Bytes Active Match Flow Gate Lock Passed!
         if [ "$TOTAL_BYTES" -gt "$BYTE_THRESHOLD" ]; then
-            if ! grep -q "^$SUBNET_24" "$POST_PENDING_FILE" 2>/dev/null; then
+            # Only write once
+            if ! grep -q "^${SUBNET_24} " "$POST_PENDING_FILE" 2>/dev/null; then
+                LOCATION=$(get_location "$SERVER_IP")
+                TIMESTAMP=$(date '+%Y-%m-%d %H:%M')
+
                 echo "$SUBNET_24" >> "$POST_PENDING_FILE"
-                echo "$SUBNET_24 #Optimal_Zone" >> "$MASTER_FILE"
+                echo "$SUBNET_24 | $LOCATION | Optimal_Zone - passed volume filter (>${BYTE_THRESHOLD}B) @ $TIMESTAMP" >> "$MASTER_FILE"
             fi
             break
         fi
-        
+
         sleep 1
-        check_cycle=$((check_cycle + 1))
+        cycle=$((cycle + 1))
     done
 done
