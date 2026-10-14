@@ -2,8 +2,8 @@
 # ==============================================================================
 # WEEKLY MAXMIND GEOLITE2 UPDATER (KEPT YOUR DOWNLOAD METHOD)
 # ==============================================================================
-GEO_URL="https://git.io/GeoLite2-City.mmdb"
-TARGET_DIR="/usr/share/dpi/geoip"
+GEO_URL="https://github.com/P3TERX/GeoLite.mmdb/releases/download/2026.10.13/GeoLite2-City.mmdb"
+TARGET_DIR="/root/GeoLite2-City.mmdb"
 TARGET_FILE="GeoLite2-City.mmdb"
 
 echo "[*] Checking connectivity..."
