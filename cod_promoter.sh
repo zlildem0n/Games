@@ -21,7 +21,7 @@ get_conntrack() {
     fi
 }
 
-tail -F -n +1 "$PRE_PENDING_FILE" 2>/dev/null | while read -r RAW_IP; do
+tail -F -n +1 "$dump.txt" 2>/dev/null | while read -r RAW_IP; do
     [ -z "$RAW_IP" ] && continue
     SERVER_IP=$(echo "$RAW_IP" | tr -d '[:space:]\r')
     [ -z "$SERVER_IP" ] && continue
