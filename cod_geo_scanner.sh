@@ -1,59 +1,65 @@
 #!/bin/sh
 # ==============================================================================
-# SCRIPT 2: DYNAMIC GEOGRAPHIC SCANNER ENGINE - UNIFI NATIVE PATH (BETA 3.7)
+# SCRIPT 2: DYNAMIC GEOGRAPHIC SCANNER (IMPROVED)
 # ==============================================================================
 DUMP_FILE="/root/COD_Dump.txt"
 PRE_PENDING_FILE="/root/COD_Pre_Pending.txt"
 BLOCKED_FILE="/root/COD_Blocked.txt"
 CONFIG_LIST="/root/COD_States"
-
-# FIXED NATIVE TARGET: Pointing strictly to the real UniFi OS database file folder path
 MMDB_FILE="/usr/share/dpi/geoip/GeoLite2-City.mmdb"
 
-touch "$PRE_PENDING_FILE" "$BLOCKED_FILE"
+touch "$PRE_PENDING_FILE" "$BLOCKED_FILE" 2>/dev/null
 
-echo "--- LIVE STAGE 2 GLOBAL SYSTEM GEOGRAPHIC FILTER CORE ONLINE ---"
+echo "--- LIVE STAGE 2 GEOGRAPHIC FILTER ONLINE ---"
 
-tail -f -n +1 "$DUMP_FILE" | awk '{print $0; fflush()}' | while read -r RAW_IP; do
+# Helper: check if IP already processed
+is_known() {
+    grep -q "^$1" "$PRE_PENDING_FILE" 2>/dev/null || \
+    grep -q "^$1" "$BLOCKED_FILE" 2>/dev/null
+}
+
+tail -F -n +1 "$DUMP_FILE" 2>/dev/null | while read -r RAW_IP; do
     [ -z "$RAW_IP" ] && continue
-    SERVER_IP=$(echo "$RAW_IP" | tr -d '[:space:]' | tr -d '\r')
+
+    SERVER_IP=$(echo "$RAW_IP" | tr -d '[:space:]\r')
     [ -z "$SERVER_IP" ] && continue
-    
+
+    # Basic IP validation
+    echo "$SERVER_IP" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$' || continue
+
     SUBNET_24=$(echo "$SERVER_IP" | sed 's/\.[0-9]*$/\.0\/24/')
 
-    if grep -q "^$SERVER_IP" "$PRE_PENDING_FILE" 2>/dev/null || grep -q "^$SUBNET_24" "$BLOCKED_FILE" 2>/dev/null; then
+    is_known "$SERVER_IP" && continue
+    is_known "$SUBNET_24" && continue
+
+    # GeoIP lookup
+    if [ ! -f "$MMDB_FILE" ]; then
+        echo "[!] GeoIP database missing: $MMDB_FILE"
         continue
     fi
 
-    # 1. Country code validation check against global system file
-    COUNTRY=$(mmdblookup --file "$MMDB_FILE" --ip "$SERVER_IP" country iso_code 2>/dev/null | grep -oE '"[A-Z]{2}"' | tr -d '"' | tr -d '[:space:]')
-    [ -z "$COUNTRY" ] && COUNTRY="US"
+    COUNTRY=$(mmdblookup --file "$MMDB_FILE" --ip "$SERVER_IP" country iso_code 2>/dev/null \
+              | grep -oE '"[A-Z]{2}"' | tr -d '"' | head -1)
+    [ -z "$COUNTRY" ] && COUNTRY="XX"
 
     if [ "$COUNTRY" != "US" ]; then
-        if ! grep -q "^$SUBNET_24" "$BLOCKED_FILE" 2>/dev/null; then
-            echo "$SUBNET_24 | Note: [Foreign Banned] ($COUNTRY)" >> "$BLOCKED_FILE"
-        fi
+        echo "$SUBNET_24 | Note: [Foreign] ($COUNTRY)" >> "$BLOCKED_FILE"
         continue
     fi
 
-    # 2. State Region Lookup
-    REGION=$(mmdblookup --file "$MMDB_FILE" --ip "$SERVER_IP" subdivisions 0 iso_code 2>/dev/null | grep -oE '"[A-Z]{2}"' | tr -d '"' | tr -d '[:space:]')
+    REGION=$(mmdblookup --file "$MMDB_FILE" --ip "$SERVER_IP" subdivisions 0 iso_code 2>/dev/null \
+             | grep -oE '"[A-Z]{2}"' | tr -d '"' | head -1)
     [ -z "$REGION" ] && REGION="UNK"
 
-    # 3. City Lookup - Pulls name metrics
-    CITY=$(mmdblookup --file "$MMDB_FILE" --ip "$SERVER_IP" city names en 2>/dev/null | grep -oE '"[^"]+"' | tr -d '"')
+    CITY=$(mmdblookup --file "$MMDB_FILE" --ip "$SERVER_IP" city names en 2>/dev/null \
+           | grep -oE '"[^"]+"' | tr -d '"' | head -1)
     CITY=$(echo "$CITY" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
     [ -z "$CITY" ] && CITY="UnknownCity"
 
-    # 4. Cross-reference your clean city-only configuration list file records dynamically
     IS_ALLOWED=0
     if [ -f "$CONFIG_LIST" ]; then
-        CLEANED_LIST=$(sed 's/#.*//' "$CONFIG_LIST" | sed 's/[[:space:]]*$//' | grep -v '^$')
-        
-        if echo "$CLEANED_LIST" | grep -qi "^$CITY$"; then
-            IS_ALLOWED=1
-            [ "$REGION" = "UNK" ] && REGION="MAPPED"
-        elif [ "$REGION" = "UNK" ] && [ "$CITY" = "UnknownCity" ]; then
+        if sed 's/#.*//' "$CONFIG_LIST" | sed 's/[[:space:]]*$//' | grep -v '^$' | \
+           grep -qi "^${CITY}$"; then
             IS_ALLOWED=1
         fi
     else
@@ -63,8 +69,6 @@ tail -f -n +1 "$DUMP_FILE" | awk '{print $0; fflush()}' | while read -r RAW_IP; 
     if [ "$IS_ALLOWED" -eq 1 ]; then
         echo "$SERVER_IP" >> "$PRE_PENDING_FILE"
     else
-        if ! grep -q "^$SUBNET_24" "$BLOCKED_FILE" 2>/dev/null; then
-            echo "$SUBNET_24 | Note: [Distant Zone Banned] ($CITY)" >> "$BLOCKED_FILE"
-        fi
+        echo "$SUBNET_24 | Note: [Distant] ($CITY, $REGION)" >> "$BLOCKED_FILE"
     fi
 done
