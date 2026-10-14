@@ -5,7 +5,7 @@
 BLOCKED_FILE="/root/COD_Blocked.txt"
 PRE_PENDING_FILE="/root/COD_Pre_Pending.txt"
 CONFIG_LIST="/root/COD_States"
-MMDB_FILE="/usr/share/dpi/geoip/GeoLite2-City.mmdb"
+MMDB_FILE="/root/GeoLite2-City.mmdb"
 TEMP_FILE="/tmp/COD_Blocked_Review.tmp"
 
 [ ! -f "$BLOCKED_FILE" ] && exit 0
