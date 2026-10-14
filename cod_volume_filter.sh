@@ -5,7 +5,7 @@
 PENDING_FILE="/root/COD_Pending.txt"
 POST_PENDING_FILE="/root/COD_Post_Pending.txt"
 MASTER_FILE="/root/COD_Master.txt"
-MMDB_FILE="/usr/share/dpi/geoip/GeoLite2-City.mmdb"
+MMDB_FILE="/root/GeoLite2-City.mmdb"
 PORTS="49806|49290"
 BYTE_THRESHOLD=10000
 MAX_WAIT=20
