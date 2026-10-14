@@ -1,13 +1,12 @@
-bash
 #!/bin/sh
 # ==============================================================================
-# SCRIPT 2: DYNAMIC GEOGRAPHIC SCANNER (IMPROVED & FIXED)
+# SCRIPT 2: DYNAMIC GEOGRAPHIC SCANNER (IMPROVED)
 # ==============================================================================
 DUMP_FILE="/root/COD_Dump.txt"
 PRE_PENDING_FILE="/root/COD_Pre_Pending.txt"
 BLOCKED_FILE="/root/COD_Blocked.txt"
 CONFIG_LIST="/root/COD_States"
-MMDB_FILE="/root/GeoLite2-City.mmdb" # <-- Updated to your root folder path
+MMDB_FILE="/usr/share/dpi/geoip/GeoLite2-City.mmdb"
 
 touch "$PRE_PENDING_FILE" "$BLOCKED_FILE" 2>/dev/null
 
@@ -15,7 +14,6 @@ echo "--- LIVE STAGE 2 GEOGRAPHIC FILTER ONLINE ---"
 
 # Helper: check if IP already processed
 is_known() {
-    # FIXED: Removed the erroneous space after the ^ anchor
     grep -q "^$1" "$PRE_PENDING_FILE" 2>/dev/null || \
     grep -q "^$1" "$BLOCKED_FILE" 2>/dev/null
 }
@@ -41,23 +39,19 @@ tail -F -n +1 "$DUMP_FILE" 2>/dev/null | while read -r RAW_IP; do
     fi
 
     COUNTRY=$(mmdblookup --file "$MMDB_FILE" --ip "$SERVER_IP" country iso_code 2>/dev/null \
-
               | grep -oE '"[A-Z]{2}"' | tr -d '"' | head -1)
     [ -z "$COUNTRY" ] && COUNTRY="XX"
 
-    # FIXED: Removed the space before US
     if [ "$COUNTRY" != "US" ]; then
         echo "$SUBNET_24 | Note: [Foreign] ($COUNTRY)" >> "$BLOCKED_FILE"
         continue
     fi
 
     REGION=$(mmdblookup --file "$MMDB_FILE" --ip "$SERVER_IP" subdivisions 0 iso_code 2>/dev/null \
-
              | grep -oE '"[A-Z]{2}"' | tr -d '"' | head -1)
     [ -z "$REGION" ] && REGION="UNK"
 
     CITY=$(mmdblookup --file "$MMDB_FILE" --ip "$SERVER_IP" city names en 2>/dev/null \
-
            | grep -oE '"[^"]+"' | tr -d '"' | head -1)
     CITY=$(echo "$CITY" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
     [ -z "$CITY" ] && CITY="UnknownCity"
@@ -77,5 +71,4 @@ tail -F -n +1 "$DUMP_FILE" 2>/dev/null | while read -r RAW_IP; do
     else
         echo "$SUBNET_24 | Note: [Distant] ($CITY, $REGION)" >> "$BLOCKED_FILE"
     fi
-done
 done
