@@ -1,6 +1,6 @@
 #!/bin/sh
 # ==============================================================================
-# SCRIPT 5: PIPELINE MONITOR (IMPROVED)
+# SCRIPT 5: PIPELINE MONITOR (IMPROVED + BLOCKED REVIEWER)
 # ==============================================================================
 DUMP="/root/COD_Dump.txt"
 PRE="/root/COD_Pre_Pending.txt"
@@ -29,10 +29,11 @@ while true; do
     echo "================================================================================"
     echo " TIME : $(date '+%Y-%m-%d %H:%M:%S')"
     echo "--------------------------------------------------------------------------------"
-    printf "  Watcher          : %s\n" "$(status cod_watcher.sh)"
-    printf "  Geo Scanner      : %s\n" "$(status cod_geo_scanner.sh)"
-    printf "  Handshake Promoter: %s\n" "$(status cod_promoter.sh)"
-    printf "  Volume Filter    : %s\n" "$(status cod_volume_filter.sh)"
+    printf "  Watcher            : %s\n" "$(status cod_watcher.sh)"
+    printf "  Geo Scanner        : %s\n" "$(status cod_geo_scanner.sh)"
+    printf "  Handshake Promoter : %s\n" "$(status cod_promoter.sh)"
+    printf "  Volume Filter      : %s\n" "$(status cod_volume_filter.sh)"
+    printf "  Blocked Reviewer   : %s\n" "$(status cod_blocked_review.sh)"
     echo "--------------------------------------------------------------------------------"
     echo "  Stage 1 Dump          : $(count_lines "$DUMP") IPs"
     echo "  Stage 2 Pre-Pending   : $(count_lines "$PRE") IPs"
