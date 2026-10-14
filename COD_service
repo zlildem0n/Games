@@ -1,39 +1,48 @@
 #!/bin/sh
 # ==============================================================================
-# SCRIPT 11: 4-TIER BACKGROUND SERVICE DAEMON CONTROLLER (BETA 3.4)
+# 4-TIER SERVICE CONTROLLER (IMPROVED)
 # ==============================================================================
+SCRIPTS="cod_watcher.sh cod_geo_scanner.sh cod_promoter.sh cod_volume_filter.sh"
+
 case "$1" in
     start)
-        echo "[*] Initializing Call of Duty 5-Stage Pipelines..."
-        /root/cod_watcher.sh >/dev/null 2>&1 &
-        /root/cod_geo_scanner.sh >/dev/null 2>&1 &
-        /root/cod_promoter.sh >/dev/null 2>&1 &
-        /root/cod_volume_filter.sh >/dev/null 2>&1 &
-        echo "[+] All background pipelines running safely ONLINE."
+        echo "[*] Starting COD pipelines..."
+        for s in $SCRIPTS; do
+            if ! pgrep -f "$s" >/dev/null 2>&1; then
+                /root/$s >/dev/null 2>&1 &
+                echo "  + $s"
+            else
+                echo "  = $s already running"
+            fi
+        done
+        echo "[+] Start complete."
         ;;
     stop)
-        echo "[*] Terminating Call of Duty Background Daemons..."
-        pgrep -f "cod_watcher.sh" | xargs kill -9 2>/dev/null
-        pgrep -f "cod_geo_scanner.sh" | xargs kill -9 2>/dev/null
-        pgrep -f "cod_promoter.sh" | xargs kill -9 2>/dev/null
-        pgrep -f "cod_volume_filter.sh" | xargs kill -9 2>/dev/null
-        echo "[+] System background spaces cleared."
+        echo "[*] Stopping COD pipelines..."
+        for s in $SCRIPTS; do
+            pgrep -f "$s" | xargs -r kill 2>/dev/null
+            sleep 0.3
+            pgrep -f "$s" | xargs -r kill -9 2>/dev/null
+        done
+        echo "[+] Stopped."
         ;;
     restart)
-        $0 stop && sleep 1 && $0 start
+        $0 stop
+        sleep 1
+        $0 start
         ;;
     status)
         echo "================================================================================"
-        echo "            📋 SYSTEM CORE CONSOLE WORKING SERVICE METRICS MATRIX"
+        echo "                 COD PIPELINE STATUS"
         echo "================================================================================"
-        pid_w=$(pgrep -f "cod_watcher.sh" | tr '\n' ' ')
-        pid_g=$(pgrep -f "cod_geo_scanner.sh" | tr '\n' ' ')
-        pid_p=$(pgrep -f "cod_promoter.sh" | tr '\n' ' ')
-        pid_v=$(pgrep -f "cod_volume_filter.sh" | tr '\n' ' ')
-        printf "  cod_watcher.sh       : %s (PID: %s)\n" "${pid_w:+ONLINE}${pid_w:-OFFLINE}" "${pid_w:-N/A}"
-        printf "  cod_geo_scanner.sh   : %s (PID: %s)\n" "${pid_g:+ONLINE}${pid_g:-OFFLINE}" "${pid_g:-N/A}"
-        printf "  cod_promoter.sh      : %s (PID: %s)\n" "${pid_p:+ONLINE}${pid_p:-OFFLINE}" "${pid_p:-N/A}"
-        printf "  cod_volume_filter.sh : %s (PID: %s)\n" "${pid_v:+ONLINE}${pid_v:-OFFLINE}" "${pid_v:-N/A}"
+        for s in $SCRIPTS; do
+            pids=$(pgrep -f "$s" | tr '\n' ' ')
+            if [ -n "$pids" ]; then
+                printf "  %-22s : ONLINE  (PID: %s)\n" "$s" "$pids"
+            else
+                printf "  %-22s : OFFLINE\n" "$s"
+            fi
+        done
         echo "================================================================================"
         ;;
     *)
