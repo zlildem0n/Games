@@ -6,7 +6,7 @@ DUMP_FILE="/root/COD_Dump.txt"
 PRE_PENDING_FILE="/root/COD_Pre_Pending.txt"
 BLOCKED_FILE="/root/COD_Blocked.txt"
 CONFIG_LIST="/root/COD_States"
-MMDB_FILE="/usr/share/dpi/geoip/GeoLite2-City.mmdb"
+MMDB_FILE="/root/GeoLite2-City.mmdb"
 
 touch "$PRE_PENDING_FILE" "$BLOCKED_FILE" 2>/dev/null
 
