@@ -1,49 +1,51 @@
 #!/bin/sh
 # ==============================================================================
-# SCRIPT 6: UNBUFFERED HANDSHAKE PROMOTER (STAGE 3 ARCHITECTURE)
+# SCRIPT 3: HANDSHAKE PROMOTER (IMPROVED)
 # ==============================================================================
 PRE_PENDING_FILE="/root/COD_Pre_Pending.txt"
 PENDING_FILE="/root/COD_Pending.txt"
+PORTS="49806|49290"
+MIN_PACKETS=12
+MIN_BYTES=666
+MAX_WAIT=8
 
-touch "$PENDING_FILE"
+touch "$PENDING_FILE" 2>/dev/null
 
-echo "--- LIVE STAGE 3 UNBUFFERED HANDSHAKE PROMOTER ONLINE ---"
+echo "--- LIVE STAGE 3 HANDSHAKE PROMOTER ONLINE ---"
 
-# FIXED: Forcing instant line delivery with an unbuffered awk flush rule
-tail -f -n +1 "$PRE_PENDING_FILE" | awk '{print $0; fflush()}' | while read -r RAW_IP; do
+get_conntrack() {
+    if command -v conntrack >/dev/null 2>&1; then
+        conntrack -L -p udp --dst "$1" 2>/dev/null | grep -E "sport=($PORTS)|dport=($PORTS)"
+    else
+        grep -E "udp.*$1" /proc/net/nf_conntrack 2>/dev/null | grep -E "sport=($PORTS)|dport=($PORTS)"
+    fi
+}
+
+tail -F -n +1 "$PRE_PENDING_FILE" 2>/dev/null | while read -r RAW_IP; do
     [ -z "$RAW_IP" ] && continue
-    
-    # Scrub all hidden space and carriage return layout artifacts off the IP variable
-    SERVER_IP=$(echo "$RAW_IP" | tr -d '[:space:]' | tr -d '\r')
+    SERVER_IP=$(echo "$RAW_IP" | tr -d '[:space:]\r')
     [ -z "$SERVER_IP" ] && continue
-    
-    grep -q "^$SERVER_IP" "$PENDING_FILE" 2>/dev/null && continue
 
-    # FIXED: Give the server connection up to 5 seconds to complete its operational handshake
-    handshake_loop=1
-    while [ "$handshake_loop" -le 5 ]; do
-        if [ -x "$(command -v conntrack)" ]; then
-            RAW_TRACK=$(conntrack -L -p udp --dst "$SERVER_IP" 2>/dev/null | grep -E "sport=(49806|49290)|dport=(49806|49290)")
-        else
-            RAW_TRACK=$(grep -E "udp.*$SERVER_IP" /proc/net/nf_conntrack 2>/dev/null | grep -E "sport=(49806|49290)|dport=(49806|49290)")
-        fi
-        
+    grep -q "^${SERVER_IP}$" "$PENDING_FILE" 2>/dev/null && continue
+
+    loop=1
+    while [ "$loop" -le "$MAX_WAIT" ]; do
+        RAW_TRACK=$(get_conntrack "$SERVER_IP")
         [ -z "$RAW_TRACK" ] && break
 
-        PKT_COUNT=$(echo "$RAW_TRACK" | grep -oE 'packets=[0-9]+' | cut -d'=' -f2 | head -n1)
-        BYTE_COUNT=$(echo "$RAW_TRACK" | grep -oE 'bytes=[0-9]+' | cut -d'=' -f2 | head -n1)
-        [ -z "$PKT_COUNT" ] && PKT_COUNT=0
-        [ -z "$BYTE_COUNT" ] && BYTE_COUNT=0
+        PKT_COUNT=$(echo "$RAW_TRACK" | grep -oE 'packets=[0-9]+' | cut -d= -f2 | head -1)
+        BYTE_COUNT=$(echo "$RAW_TRACK" | grep -oE 'bytes=[0-9]+' | cut -d= -f2 | head -1)
+        PKT_COUNT=${PKT_COUNT:-0}
+        BYTE_COUNT=${BYTE_COUNT:-0}
 
-        # 12 Packets or 666 Bytes Handshake Gate Lock Passed!
-        if [ "$PKT_COUNT" -ge 12 ] || [ "$BYTE_COUNT" -ge 666 ]; then
-            if ! grep -q "^$SERVER_IP" "$PENDING_FILE" 2>/dev/null; then
+        if [ "$PKT_COUNT" -ge "$MIN_PACKETS" ] || [ "$BYTE_COUNT" -ge "$MIN_BYTES" ]; then
+            if ! grep -q "^${SERVER_IP}$" "$PENDING_FILE" 2>/dev/null; then
                 echo "$SERVER_IP" >> "$PENDING_FILE"
             fi
             break
         fi
-        
+
         sleep 1
-        handshake_loop=$((handshake_loop + 1))
+        loop=$((loop + 1))
     done
 done
