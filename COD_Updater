@@ -1,6 +1,6 @@
 #!/bin/sh
 # ==============================================================================
-# AUTOMATED PIPELINE UPDATER (IMPROVED)
+# AUTOMATED PIPELINE UPDATER (IMPROVED + BLOCKED REVIEWER)
 # ==============================================================================
 RAW_URL="https://raw.githubusercontent.com/zlildem0n/Games/main"
 TARGET="/root"
@@ -14,7 +14,7 @@ fi
 echo "[*] Synchronizing scripts..."
 
 # Core daemons
-for f in cod_watcher.sh cod_geo_scanner.sh cod_promoter.sh cod_volume_filter.sh; do
+for f in cod_watcher.sh cod_geo_scanner.sh cod_promoter.sh cod_volume_filter.sh cod_blocked_review.sh; do
     curl -k -sSL "${RAW_URL}/${f}" -o "${TARGET}/${f}" && chmod 755 "${TARGET}/${f}"
 done
 
