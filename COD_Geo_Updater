@@ -1,32 +1,35 @@
 #!/bin/sh
 # ==============================================================================
-# WEEKLY MAXMIND GEOLITE2 CITY BINARY UPDATER (UNIFI SYSTEM PARSING FIX)
+# WEEKLY MAXMIND GEOLITE2 UPDATER (KEPT YOUR DOWNLOAD METHOD)
 # ==============================================================================
 GEO_URL="https://git.io/GeoLite2-City.mmdb"
 TARGET_DIR="/usr/share/dpi/geoip"
 TARGET_FILE="GeoLite2-City.mmdb"
 
-if ! curl -s --connect-timeout 5 https://github.com > /dev/null; then
-    echo "[!] GitHub platform unreachable. Skipping scheduled database refresh."
+echo "[*] Checking connectivity..."
+if ! curl -s --connect-timeout 8 https://github.com >/dev/null; then
+    echo "[!] GitHub unreachable. Aborting."
     exit 1
 fi
 
 mkdir -p "$TARGET_DIR"
-TMP_MMDB="/tmp/${TARGET_FILE}_new"
+TMP_MMDB="/tmp/${TARGET_FILE}.$$"
 
-if curl -k -sSL "$GEO_URL" -o "$TMP_MMDB" && [ -s "$TMP_MMDB" ]; then
-    if grep -q "html" "$TMP_MMDB" 2>/dev/null || grep -q "Not Found" "$TMP_MMDB" 2>/dev/null; then
+echo "[*] Downloading GeoLite2 database..."
+if curl -k -sSL --connect-timeout 15 --max-time 120 "$GEO_URL" -o "$TMP_MMDB" && [ -s "$TMP_MMDB" ]; then
+    # Basic sanity check
+    if grep -qiE 'html|not found|error|404' "$TMP_MMDB" 2>/dev/null; then
         rm -f "$TMP_MMDB"
-        echo "[!] Error: Captured an HTML error payload instead of binary data. Aborting sync."
+        echo "[!] Received HTML/error page instead of binary database."
         exit 1
     fi
 
-    # Force overwrite straight into the real UniFi OS DPI mapping layout directory
+    # Optional: check magic (MaxMind DBs start with specific bytes, but keep it simple)
     mv -f "$TMP_MMDB" "${TARGET_DIR}/${TARGET_FILE}"
     chmod 644 "${TARGET_DIR}/${TARGET_FILE}"
-    echo "[SUCCESS] Global UniFi OS native system GeoIP maps successfully updated: ${TARGET_DIR}/${TARGET_FILE}"
+    echo "[SUCCESS] Updated: ${TARGET_DIR}/${TARGET_FILE}"
 else
     rm -f "$TMP_MMDB"
-    echo "[!] Error: Failed to fetch binary payload from source repository."
+    echo "[!] Download failed."
     exit 1
 fi
