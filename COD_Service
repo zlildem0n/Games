@@ -1,6 +1,6 @@
 #!/bin/sh
 # ==============================================================================
-# COD SERVICE CONTROLLER - KERNEL CONNTRACK ENGINE COMPATIBLE (V4.6)
+# COD SERVICE CONTROLLER - PRECISE MATCH ENGINE (V4.8)
 # ==============================================================================
 SCRIPTS="cod_watcher.sh cod_geo_scanner.sh cod_promoter.sh cod_volume_filter.sh"
 RAW_URL="https://raw.githubusercontent.com/zlildem0n/Games/main"
@@ -10,8 +10,9 @@ case "$1" in
     start)
         echo "[*] Starting COD unbuffered network pipelines..."
         
-        # 1. Boot Stage 1 (Conntrack Engine Sniper) Natively into Background Space
-        if ! pgrep -f "cod_watcher.sh" >/dev/null 2>&1; then
+        # 1. Boot Stage 1 (Conntrack Engine Sniper) with strict string validation
+        # By adding a bracket [c]od, pgrep ignores the running controller script line text
+        if ! pgrep -f "[c]od_watcher.sh" >/dev/null 2>&1; then
             /root/cod_watcher.sh >/dev/null 2>&1 &
             echo "  + cod_watcher.sh (Kernel State Sniper)"
             sleep 1
@@ -21,7 +22,12 @@ case "$1" in
 
         # 2. Boot Remaining Filter and Promoter Automation Daemons safely
         for s in cod_geo_scanner.sh cod_promoter.sh cod_volume_filter.sh; do
-            if ! pgrep -f "$s" >/dev/null 2>&1; then
+            # Slices string dynamically to prevent self-matching clashes
+            first_char=$(echo "$s" | cut -c1)
+            rest_chars=$(echo "$s" | cut -c2-)
+            pattern="[$first_char]$rest_chars"
+            
+            if ! pgrep -f "$pattern" >/dev/null 2>&1; then
                 /root/$s >/dev/null 2>&1 &
                 echo "  + $s"
                 sleep 0.5
@@ -50,8 +56,11 @@ case "$1" in
         echo "                 COD PIPELINE METRICS RUN-STATES"
         echo "================================================================================"
         for s in $SCRIPTS; do
-            # Isolates absolute primary tracking parent ID handles perfectly
-            pids=$(pgrep -o -f "$s" | tr '\n' ' ')
+            first_char=$(echo "$s" | cut -c1)
+            rest_chars=$(echo "$s" | cut -c2-)
+            pattern="[$first_char]$rest_chars"
+            
+            pids=$(pgrep -o -f "$pattern" | tr '\n' ' ')
             if [ -n "$pids" ]; then
                 printf "  %-22s : ONLINE  (PID: %s)\n" "$s" "$pids"
             else
