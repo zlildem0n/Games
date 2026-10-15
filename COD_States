@@ -1,3 +1,4 @@
+# --- CITIES ---
 New York
 Piscataway
 Newark
@@ -11,6 +12,7 @@ Richmond
 Reston
 Elk Grove
 
+# --- STATE CODES ---
 PA
 OH
 NY
@@ -19,7 +21,9 @@ GA
 VA
 IL
 
+# --- FULL STATE NAMES ---
 Illinois
 Georgia
 
+# --- COUNTRY CODES ---
 US
