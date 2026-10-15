@@ -1,6 +1,6 @@
 #!/bin/sh
 # ==============================================================================
-# SCRIPT 4: HEAVY VOLUME FILTER (IMPROVED + DETAILED MASTER LIST)
+# SCRIPT 4: HEAVY VOLUME FILTER (Single IP version)
 # ==============================================================================
 PENDING_FILE="/root/COD_Pending.txt"
 POST_PENDING_FILE="/root/COD_Post_Pending.txt"
@@ -54,8 +54,9 @@ tail -F -n +1 "$PENDING_FILE" 2>/dev/null | while read -r RAW_IP; do
     # Basic IP check
     echo "$SERVER_IP" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$' || continue
 
-    SUBNET_24=$(echo "$SERVER_IP" | sed 's/\.[0-9]*$/\.0\/24/')
-    grep -q "^${SUBNET_24} " "$POST_PENDING_FILE" 2>/dev/null && continue
+    # Skip if this exact IP is already processed
+    grep -q "^${SERVER_IP}" "$POST_PENDING_FILE" 2>/dev/null && continue
+    grep -q "^${SERVER_IP}" "$MASTER_FILE" 2>/dev/null && continue
 
     cycle=1
     while [ "$cycle" -le "$MAX_WAIT" ]; do
@@ -67,13 +68,13 @@ tail -F -n +1 "$PENDING_FILE" 2>/dev/null | while read -r RAW_IP; do
         TOTAL_BYTES=${TOTAL_BYTES:-0}
 
         if [ "$TOTAL_BYTES" -gt "$BYTE_THRESHOLD" ]; then
-            # Only write once
-            if ! grep -q "^${SUBNET_24} " "$POST_PENDING_FILE" 2>/dev/null; then
+            # Write single IP only
+            if ! grep -q "^${SERVER_IP}" "$POST_PENDING_FILE" 2>/dev/null; then
                 LOCATION=$(get_location "$SERVER_IP")
                 TIMESTAMP=$(date '+%Y-%m-%d %H:%M')
 
-                echo "$SUBNET_24" >> "$POST_PENDING_FILE"
-                echo "$SUBNET_24 | $LOCATION | Optimal_Zone - passed volume filter (>${BYTE_THRESHOLD}B) @ $TIMESTAMP" >> "$MASTER_FILE"
+                echo "$SERVER_IP" >> "$POST_PENDING_FILE"
+                echo "$SERVER_IP | $LOCATION | Optimal_Zone - passed volume filter (>${BYTE_THRESHOLD}B) @ $TIMESTAMP" >> "$MASTER_FILE"
             fi
             break
         fi
