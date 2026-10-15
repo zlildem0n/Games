@@ -1,40 +1,28 @@
 #!/bin/sh
 # ==============================================================================
-# SCRIPT 2: 3-TIER GEO FILTER + LIVE IPINFO.IO API BACKUP (SINGLE IP STRICT)
+# SCRIPT 3: HANDSHAKE PROMOTER (STAGE 3 ARCHITECTURE - SINGLE IP STRICT)
 # ==============================================================================
-DUMP_FILE="/root/COD_Dump.txt"
 PRE_PENDING_FILE="/root/COD_Pre_Pending.txt"
-BLOCKED_FILE="/root/COD_Blocked.txt"
-CONFIG_LIST="/root/COD_States"
-MMDB_FILE="/root/GeoLite2-City.mmdb"
-REMOTE_STATES="https://githubusercontent.com"
+PENDING_FILE="/root/COD_Pending.txt"
+MASTER_FILE="/root/COD_Master.txt"
+PORTS="49806|49290"
+MIN_PACKETS=12
+MIN_BYTES=666
+MAX_WAIT=5
 
-echo "[*] Fetching latest COD_States from GitHub..."
-if curl -k -sSL --connect-timeout 10 "$REMOTE_STATES" -o "${CONFIG_LIST}.tmp" && [ -s "${CONFIG_LIST}.tmp" ]; then
-    mv -f "${CONFIG_LIST}.tmp" "$CONFIG_LIST"
-    chmod 644 "$CONFIG_LIST"
-    echo "[+] COD_States updated from GitHub"
-else
-    echo "[!] Failed to download COD_States – using local copy if available"
-    rm -f "${CONFIG_LIST}.tmp"
-fi
+touch "$PENDING_FILE" "$MASTER_FILE" 2>/dev/null
 
-touch "$PRE_PENDING_FILE" "$BLOCKED_FILE" 2>/dev/null
+echo "--- LIVE STAGE 3 HANDSHAKE PROMOTER ONLINE ---"
 
-echo "--- LIVE STAGE 2: 3-TIER FILTER (SINGLE IP STRICT) ONLINE ---"
-
-is_known() {
-    grep -q "^$1$" "$PRE_PENDING_FILE" 2>/dev/null || \
-    grep -q "^$1 " "$BLOCKED_FILE" 2>/dev/null
+get_conntrack() {
+    if command -v conntrack >/dev/null 2>&1; then
+        conntrack -L -p udp --dst "$1" 2>/dev/null | grep -E "sport=($PORTS)|dport=($PORTS)"
+    else
+        grep -E "udp.*$1" /proc/net/nf_conntrack 2>/dev/null | grep -E "sport=($PORTS)|dport=($PORTS)"
+    fi
 }
 
-in_list() {
-    value="$1"
-    [ ! -f "$CONFIG_LIST" ] && return 1
-    sed 's/#.*//' "$CONFIG_LIST" | sed 's/[[:space:]]*$//' | grep -v '^$' | grep -qiw "^${value}$"
-}
-
-tail -F -n +1 "$DUMP_FILE" 2>/dev/null | while read -r RAW_IP; do
+tail -F -n +1 "$PRE_PENDING_FILE" 2>/dev/null | while read -r RAW_IP; do
     [ -z "$RAW_IP" ] && continue
 
     SERVER_IP=$(echo "$RAW_IP" | tr -d '[:space:]\r')
@@ -42,63 +30,29 @@ tail -F -n +1 "$DUMP_FILE" 2>/dev/null | while read -r RAW_IP; do
 
     echo "$SERVER_IP" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$' || continue
 
-    is_known "$SERVER_IP" && continue
+    # Check for exact single IP in downstream queues instead of /24 subnets
+    grep -q "^${SERVER_IP}$" "$PENDING_FILE" 2>/dev/null && continue
+    grep -q "^${SERVER_IP} " "$MASTER_FILE" 2>/dev/null && continue
 
-    if [ ! -f "$MMDB_FILE" ]; then
-        echo "[!] GeoIP database missing: $MMDB_FILE"
-        continue
-    fi
+    loop=1
+    while [ "$loop" -le "$MAX_WAIT" ]; do
+        RAW_TRACK=$(get_conntrack "$SERVER_IP")
+        [ -z "$RAW_TRACK" ] && break
 
-    # --------------------------------------------------------------------------
-    # PHASE 1: LOCAL MAXMIND OFFLINE DATABASE LOOKUP
-    # --------------------------------------------------------------------------
-    COUNTRY=$(mmdblookup --file "$MMDB_FILE" --ip "$SERVER_IP" country iso_code 2>/dev/null | grep -oE '"[A-Z]{2}"' | tr -d '"' | head -1)
-    REGION=$(mmdblookup --file "$MMDB_FILE" --ip "$SERVER_IP" subdivisions 0 iso_code 2>/dev/null | grep -oE '"[A-Z]{2}"' | tr -d '"' | head -1)
-    CITY=$(mmdblookup --file "$MMDB_FILE" --ip "$SERVER_IP" city names en 2>/dev/null | grep -oE '"[^"]+"' | tr -d '"' | head -1)
-    CITY=$(echo "$CITY" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
+        PKT_COUNT=$(echo "$RAW_TRACK" | grep -oE 'packets=[0-9]+' | cut -d= -f2 | head -1)
+        BYTE_COUNT=$(echo "$RAW_TRACK" | grep -oE 'bytes=[0-9]+' | cut -d= -f2 | head -1)
 
-    # --------------------------------------------------------------------------
-    # PHASE 2: IPINFO.IO API LIVE BACKUP CORE INTERCEPT
-    # --------------------------------------------------------------------------
-    if [ -z "$COUNTRY" ] || [ -z "$REGION" ] || [ -z "$CITY" ]; then
-        API_PAYLOAD=$(curl -s --connect-timeout 3 "https://ipinfo.io{SERVER_IP}/json")
-        if [ -n "$API_PAYLOAD" ] && ! echo "$API_PAYLOAD" | grep -qi "error"; then
-            [ -z "$COUNTRY" ] && COUNTRY=$(echo "$API_PAYLOAD" | grep -oP '"country":\s*"\K[^"]+')
-            [ -z "$REGION" ]  && REGION=$(echo "$API_PAYLOAD" | grep -oP '"region_code":\s*"\K[^"]+')
-            [ -z "$CITY" ]    && CITY=$(echo "$API_PAYLOAD" | grep -oP '"city":\s*"\K[^"]+')
-            CITY=$(echo "$CITY" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
+        PKT_COUNT=${PKT_COUNT:-0}
+        BYTE_COUNT=${BYTE_COUNT:-0}
+
+        if [ "$PKT_COUNT" -ge "$MIN_PACKETS" ] || [ "$BYTE_COUNT" -ge "$MIN_BYTES" ]; then
+            if ! grep -q "^${SERVER_IP}$" "$PENDING_FILE" 2>/dev/null; then
+                echo "$SERVER_IP" >> "$PENDING_FILE"
+            fi
+            break
         fi
-    fi
 
-    # --------------------------------------------------------------------------
-    # TIER 1: Country Validation Gate
-    # --------------------------------------------------------------------------
-    if [ -z "$COUNTRY" ] || [ "$COUNTRY" != "US" ]; then
-        [ -z "$COUNTRY" ] && COUNTRY="UNKNOWN"
-        echo "$SERVER_IP | Note: [Tier 1] Non-US ($COUNTRY)" >> "$BLOCKED_FILE"
-        continue
-    fi
-
-    # --------------------------------------------------------------------------
-    # TIER 2: State Validation Gate
-    # --------------------------------------------------------------------------
-    if [ -z "$REGION" ] || ! in_list "$REGION"; then
-        [ -z "$REGION" ] && REGION="UNKNOWN"
-        echo "$SERVER_IP | Note: [Tier 2] State not in list ($REGION)" >> "$BLOCKED_FILE"
-        continue
-    fi
-
-    # --------------------------------------------------------------------------
-    # TIER 3: City Validation Gate
-    # --------------------------------------------------------------------------
-    if [ -z "$CITY" ]; then
-        echo "$SERVER_IP | Note: [Tier 3] Unknown City ($REGION)" >> "$BLOCKED_FILE"
-        continue
-    fi
-
-    if in_list "$CITY"; then
-        echo "$SERVER_IP" >> "$PRE_PENDING_FILE"
-    else
-        echo "$SERVER_IP | Note: [Tier 3] City not in list ($CITY, $REGION)" >> "$BLOCKED_FILE"
-    fi
+        sleep 1
+        loop=$((loop + 1))
+    done
 done
