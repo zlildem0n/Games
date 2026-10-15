@@ -4,7 +4,7 @@
 # - Skips IPs already in Master list (exact IP only)
 # - Window set to 5 seconds
 # ==============================================================================
-PRE_PENDING_FILE="/root/COD_Pre_Pending.txt"
+PRE_PENDING_FILE="/root/COD_Dump.txt"
 PENDING_FILE="/root/COD_Pending.txt"
 MASTER_FILE="/root/COD_Master.txt"
 PORTS="49806|49290"
