@@ -7,7 +7,7 @@ PRE_PENDING_FILE="/root/COD_Pre_Pending.txt"
 BLOCKED_FILE="/root/COD_Blocked.txt"
 CONFIG_LIST="/root/COD_States"
 MMDB_FILE="/root/GeoLite2-City.mmdb"
-REMOTE_STATES="https://githubusercontent.com"
+REMOTE_STATES="https://raw.githubusercontent.com/zlildem0n/Games/refs/heads/main/COD_States"
 
 echo "[*] Fetching latest COD_States from GitHub..."
 if curl -k -sSL --connect-timeout 10 "$REMOTE_STATES" -o "${CONFIG_LIST}.tmp" && [ -s "${CONFIG_LIST}.tmp" ]; then
@@ -61,7 +61,7 @@ tail -F -n +1 "$DUMP_FILE" 2>/dev/null | while read -r RAW_IP; do
     # PHASE 2: IPINFO.IO API LIVE BACKUP CORE INTERCEPT
     # --------------------------------------------------------------------------
     if [ -z "$COUNTRY" ] || [ -z "$REGION" ] || [ -z "$CITY" ]; then
-        API_PAYLOAD=$(curl -s --connect-timeout 3 "https://ipinfo.io{SERVER_IP}/json")
+        API_PAYLOAD=$(curl -s --connect-timeout 3 "https://ipinfo.io${SERVER_IP}/json")
         if [ -n "$API_PAYLOAD" ] && ! echo "$API_PAYLOAD" | grep -qi "error"; then
             [ -z "$COUNTRY" ] && COUNTRY=$(echo "$API_PAYLOAD" | grep -oP '"country":\s*"\K[^"]+')
             [ -z "$REGION" ]  && REGION=$(echo "$API_PAYLOAD" | grep -oP '"region_code":\s*"\K[^"]+')
