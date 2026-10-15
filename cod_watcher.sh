@@ -1,57 +1,48 @@
 #!/bin/sh
 # ==============================================================================
-# SCRIPT 1: RAW NETWORK SNIPER (WAN + exact IP Master check)
+# SCRIPT 1: RAW NETWORK SNIPER - KERNEL CONNTRACK EVENT ENGINE (STAGE 1)
 # ==============================================================================
 DUMP_FILE="/root/COD_Dump.txt"
-MASTER_FILE="/root/COD_Master.txt"
-INTERFACE="eth4"
-PORTS="49806 or 49290"
-MAX_LINES=50000
+PORTS="49806,49290"
 
-# Optional: put your public WAN IP here to ignore it
-WAN_IP="24.229.189.181"
-
-touch "$DUMP_FILE" "$MASTER_FILE" 2>/dev/null
-chmod 666 "$DUMP_FILE" 2>/dev/null
-
-# Size protection
-if [ -f "$DUMP_FILE" ]; then
-    lines=$(wc -l < "$DUMP_FILE" 2>/dev/null || echo 0)
-    if [ "$lines" -gt "$MAX_LINES" ]; then
-        tail -n $((MAX_LINES / 2)) "$DUMP_FILE" > "${DUMP_FILE}.tmp"
-        mv "${DUMP_FILE}.tmp" "$DUMP_FILE"
-    fi
+if [ ! -f "$DUMP_FILE" ]; then
+    touch "$DUMP_FILE" && chmod 666 "$DUMP_FILE"
 fi
 
-echo "--- LIVE RECONNAISSANCE PACKET SNIPER ACTIVE ---"
-echo "[*] Interface: $INTERFACE | Ports: $PORTS"
+echo "--- LIVE KERNEL CONNTRACK PACKET SNIPER ACTIVE ---"
+echo "[*] Monitoring real-time matchmaking handshakes via netfilter states..."
 echo "================================================================================"
 
-tcpdump -i "$INTERFACE" -nn -l -q "udp and (port $PORTS)" 2>/dev/null | \
-awk -v wan="$WAN_IP" -v master="$MASTER_FILE" '
-function already_processed(ip) {
-    # Only check for the exact IP in the Master list
-    cmd = "grep -q \"^" ip "\" " master " 2>/dev/null"
-    return (system(cmd) == 0)
+# Force unbuffered streaming (-o unbuffered) tracking ONLY new UDP gaming sockets
+# Output line example: [NEW] udp 17 30 src=192.168.1.50 dst=45.76.4.42 sport=49806 dport=49806
+conntrack -E -p udp -e NEW 2>/dev/null | awk -v ports="$PORTS" '
+BEGIN {
+    # Split allowed destination ports into an array for high-speed checking
+    split(ports, p_arr, ",")
 }
-
 {
-    for (i = 1; i <= NF; i++) {
-        if ($i ~ /^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$/) {
-            ip = $i
-
-            # Skip our own WAN IP
-            if (wan != "" && ip == wan) continue
-
-            # Only take the remote side
-            if ($(i-1) == ">" || $(i+1) == ">") {
-
-                # Skip if this exact IP is already in Master list
-                if (already_processed(ip)) continue
-
-                print ip
-                fflush()
+    # Validate it is a fresh kernel flow tracking string
+    if ($1 == "[NEW]") {
+        dst_ip = ""
+        dport = 0
+        
+        # Scan fields to pull destination metrics cleanly
+        for (i = 1; i <= NF; i++) {
+            if ($i ~ /^dst=/) {
+                split($i, ip_part, "=")
+                dst_ip = ip_part[2]
             }
+            if ($i ~ /^dport=/) {
+                split($i, port_part, "=")
+                dport = port_part[2]
+                break # We found the primary layer direction parameters
+            }
+        }
+        
+        # Cross-reference extracted destination port against your console ports
+        if (dst_ip != "" && (dport == p_arr[1] || dport == p_arr[2])) {
+            print dst_ip
+            fflush()
         }
     }
 }' >> "$DUMP_FILE"
