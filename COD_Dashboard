@@ -1,57 +1,51 @@
 #!/bin/sh
 # ==============================================================================
-# SCRIPT 1: RAW NETWORK SNIPER (WAN + exact IP Master check)
+# SCRIPT 8: SCOREBOARD PANEL MONITOR (CLEAN 5-STAGE PIPELINE MATRIX - V4.0)
 # ==============================================================================
-DUMP_FILE="/root/COD_Dump.txt"
-MASTER_FILE="/root/COD_Master.txt"
-INTERFACE="eth4"
-PORTS="49806 or 49290"
-MAX_LINES=50000
+DUMP="/root/COD_Dump.txt"
+PRE="/root/COD_Pre_Pending.txt"
+PEND="/root/COD_Pending.txt"
+POST="/root/COD_Post_Pending.txt"
+BLOCK="/root/COD_Blocked.txt"
+MAST="/root/COD_Master.txt"
 
-# Optional: put your public WAN IP here to ignore it
-WAN_IP=""
+clear
+while true; do
+    # Resets the terminal cursor back to the absolute top-left corner dynamically
+    printf "\033[H"
+    
+    # High-efficiency file line evaluation execution blocks
+    cnt_dump=$(wc -l "$DUMP" 2>/dev/null | awk '{print $1}')
+    cnt_pre=$(wc -l "$PRE" 2>/dev/null | awk '{print $1}')
+    cnt_pend=$(wc -l "$PEND" 2>/dev/null | awk '{print $1}')
+    cnt_post=$(wc -l "$POST" 2>/dev/null | awk '{print $1}')
+    cnt_block=$(wc -l "$BLOCK" 2>/dev/null | awk '{print $1}')
+    cnt_mast=$(wc -l "$MAST" 2>/dev/null | awk '{print $1}')
 
-touch "$DUMP_FILE" "$MASTER_FILE" 2>/dev/null
-chmod 666 "$DUMP_FILE" 2>/dev/null
+    # Dynamic run-state validation check gates
+    stat_w=$(pgrep -f "cod_watcher.sh" >/dev/null && echo "\033[0;32mONLINE\033[0m" || echo "\033[0;31mOFFLINE\033[0m")
+    stat_g=$(pgrep -f "cod_geo_scanner.sh" >/dev/null && echo "\033[0;32mONLINE\033[0m" || echo "\033[0;31mOFFLINE\033[0m")
+    stat_p=$(pgrep -f "cod_promoter.sh" >/dev/null && echo "\033[0;32mONLINE\033[0m" || echo "\033[0;31mOFFLINE\033[0m")
+    stat_v=$(pgrep -f "cod_volume_filter.sh" >/dev/null && echo "\033[0;32mONLINE\033[0m" || echo "\033[0;31mOFFLINE\033[0m")
 
-# Size protection
-if [ -f "$DUMP_FILE" ]; then
-    lines=$(wc -l < "$DUMP_FILE" 2>/dev/null || echo 0)
-    if [ "$lines" -gt "$MAX_LINES" ]; then
-        tail -n $((MAX_LINES / 2)) "$DUMP_FILE" > "${DUMP_FILE}.tmp"
-        mv "${DUMP_FILE}.tmp" "$DUMP_FILE"
-    fi
-fi
-
-echo "--- LIVE RECONNAISSANCE PACKET SNIPER ACTIVE ---"
-echo "[*] Interface: $INTERFACE | Ports: $PORTS"
-echo "================================================================================"
-
-tcpdump -i "$INTERFACE" -nn -l -q "udp and (port $PORTS)" 2>/dev/null | \
-awk -v wan="$WAN_IP" -v master="$MASTER_FILE" '
-function already_processed(ip) {
-    # Only check for the exact IP in the Master list
-    cmd = "grep -q \"^" ip "\" " master " 2>/dev/null"
-    return (system(cmd) == 0)
-}
-
-{
-    for (i = 1; i <= NF; i++) {
-        if ($i ~ /^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$/) {
-            ip = $i
-
-            # Skip our own WAN IP
-            if (wan != "" && ip == wan) continue
-
-            # Only take the remote side
-            if ($(i-1) == ">" || $(i+1) == ">") {
-
-                # Skip if this exact IP is already in Master list
-                if (already_processed(ip)) continue
-
-                print ip
-                fflush()
-            }
-        }
-    }
-}' >> "$DUMP_FILE"
+    echo "================================================================================"
+    echo "         🛡️  CALL OF DUTY HIGH-SPEED 5-STAGE PIPELINE MONITOR 🛡️          "
+    echo "================================================================================"
+    echo " TIME SNAPSHOT : $(date '+%Y-%m-%d %H:%M:%S')"
+    echo "--------------------------------------------------------------------------------"
+    echo "  ⚙️  BACKGROUND DAEMON RUN-STATES:"
+    printf "  • Watcher Sniper Engine : %s | • Geo Scanner Filter (S2) : %s\n" "$stat_w" "$stat_g"
+    printf "  • Handshake Promoter(S3): %s | • Volume 10K Filter (S4)  : %s\n" "$stat_p" "$stat_v"
+    echo "--------------------------------------------------------------------------------"
+    echo "  [+] STAGE 1: Live Snipped Queue (COD_Dump.txt)          : ${cnt_dump:-0} IPs"
+    echo "  [+] STAGE 2: Allowed Geolocation (COD_Pre_Pending.txt)  : ${cnt_pre:-0} IPs"
+    echo "  [+] STAGE 3: Handshake Verified (COD_Pending.txt)      : ${cnt_pend:-0} IPs"
+    echo "--------------------------------------------------------------------------------"
+    echo "  📊 VALIDATION MATRICES & PROMOTIONS:"
+    printf "  🟢 Stage 4 Approved Optimal   (COD_Post_Pending.txt)    : \033[0;32m%s /24 Blocks\033[0m\n" "${cnt_post:-0}"
+    printf "  ❌ Distant Region Exclusions  (COD_Blocked.txt)         : \033[0;31m%s /24 Blocks\033[0m\n" "${cnt_block:-0}"
+    echo "--------------------------------------------------------------------------------"
+    echo "  🏢 Stage 5 Master History Pool (COD_Master.txt)         : ${cnt_mast:-0} Total Entries"
+    echo "================================================================================"
+    sleep 2
+done
