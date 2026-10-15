@@ -3,7 +3,7 @@
 # COD SERVICE CONTROLLER - KERNEL CONNTRACK ENGINE COMPATIBLE (V4.6)
 # ==============================================================================
 SCRIPTS="cod_watcher.sh cod_geo_scanner.sh cod_promoter.sh cod_volume_filter.sh"
-RAW_URL="https://github.com/zlildem0n/Games/tree/main"
+RAW_URL="https://github.com/zlildem0n/Games.git"
 TARGET="/root"
 
 case "$1" in
