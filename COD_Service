@@ -1,6 +1,6 @@
 #!/bin/sh
 # ==============================================================================
-# COD SERVICE CONTROLLER (Full control + Updater)
+# COD SERVICE CONTROLLER (Full control + Updater - Parent PID Matcher Fix)
 # ==============================================================================
 SCRIPTS="cod_watcher.sh cod_geo_scanner.sh cod_promoter.sh cod_volume_filter.sh"
 RAW_URL="https://raw.githubusercontent.com/zlildem0n/Games/main"
@@ -10,7 +10,7 @@ case "$1" in
     start)
         echo "[*] Starting COD pipelines..."
         for s in $SCRIPTS; do
-            if ! pgrep -f "$s" >/dev/null 2>&1; then
+            if ! pgrep -o -f "$s" >/dev/null 2>&1; then
                 /root/$s >/dev/null 2>&1 &
                 echo "  + $s"
             else
@@ -38,7 +38,8 @@ case "$1" in
         echo "                 COD PIPELINE STATUS"
         echo "================================================================================"
         for s in $SCRIPTS; do
-            pids=$(pgrep -f "$s" | tr '\n' ' ')
+            # FIXED: -o isolates the true oldest/parent process ID, ignoring child pipeline subshells
+            pids=$(pgrep -o -f "$s" | tr '\n' ' ')
             if [ -n "$pids" ]; then
                 printf "  %-22s : ONLINE  (PID: %s)\n" "$s" "$pids"
             else
@@ -83,3 +84,4 @@ case "$1" in
         exit 1
         ;;
 esac
+EOF
