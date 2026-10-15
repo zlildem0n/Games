@@ -1,6 +1,6 @@
 #!/bin/sh
 # ==============================================================================
-# SCRIPT 1: RAW NETWORK SNIPER - ALL-EVENTS NATIVE RUNTIME (STAGE 1 - V9.5)
+# SCRIPT 1: RAW NETWORK SNIPER - ALL-EVENTS NATIVE RUNTIME (STAGE 1 - V9.5 - FIXED)
 # ==============================================================================
 DUMP_FILE="/root/COD_Dump.txt"
 
