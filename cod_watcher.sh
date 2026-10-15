@@ -1,48 +1,67 @@
 #!/bin/sh
 # ==============================================================================
-# SCRIPT 1: RAW NETWORK SNIPER - KERNEL CONNTRACK EVENT ENGINE (STAGE 1)
+# SCRIPT 1: DUAL-CONSOLE STRICT CONNTRACK SNIPER (STAGE 1 - V4.5)
 # ==============================================================================
 DUMP_FILE="/root/COD_Dump.txt"
-PORTS="49806"
+
+# Console Target Profiles
+XBOX_1_IP="192.168.1.15"
+XBOX_1_PORT="49806"
+
+XBOX_2_IP="192.168.1.6"
+XBOX_2_PORT="49290"
 
 if [ ! -f "$DUMP_FILE" ]; then
     touch "$DUMP_FILE" && chmod 666 "$DUMP_FILE"
 fi
 
 echo "--- LIVE KERNEL CONNTRACK PACKET SNIPER ACTIVE ---"
-echo "[*] Monitoring real-time matchmaking handshakes via netfilter states..."
+echo "[*] Monitoring strict console targets: $XBOX_1_IP:$XBOX_1_PORT & $XBOX_2_IP:$XBOX_2_PORT"
 echo "================================================================================"
 
-# Force unbuffered streaming (-o unbuffered) tracking ONLY new UDP gaming sockets
-# Output line example: [NEW] udp 17 30 src=192.168.1.50 dst=45.76.4.42 sport=49806 dport=49806
-conntrack -E -p udp -e NEW 2>/dev/null | awk -v ports="$PORTS" '
+# Stream unbuffered new UDP flows from netfilter
+conntrack -E -p udp -e NEW 2>/dev/null | awk -v ip1="$XBOX_1_IP" -v pt1="$XBOX_1_PORT" -v ip2="$XBOX_2_IP" -v pt2="$XBOX_2_PORT" '
 BEGIN {
-    # Split allowed destination ports into an array for high-speed checking
-    split(ports, p_arr, ",")
+    # Set explicit profile markers
+    src_ip = ""
+    dst_ip = ""
+    sport  = 0
+    dport  = 0
 }
 {
-    # Validate it is a fresh kernel flow tracking string
     if ($1 == "[NEW]") {
-        dst_ip = ""
-        dport = 0
+        src_ip = ""; dst_ip = ""; sport = 0; dport = 0
         
-        # Scan fields to pull destination metrics cleanly
+        # Parse fields dynamically out of the kernel connection tracking string
         for (i = 1; i <= NF; i++) {
+            if ($i ~ /^src=/) {
+                split($i, p, "=")
+                src_ip = p[2]
+            }
             if ($i ~ /^dst=/) {
-                split($i, ip_part, "=")
-                dst_ip = ip_part[2]
+                split($i, p, "=")
+                dst_ip = p[2]
+            }
+            if ($i ~ /^sport=/) {
+                split($i, p, "=")
+                sport = p[2]
             }
             if ($i ~ /^dport=/) {
-                split($i, port_part, "=")
-                dport = port_part[2]
-                break # We found the primary layer direction parameters
+                split($i, p, "=")
+                dport = p[2]
+                break # Reached end of outbound tracking parameters
             }
         }
         
-        # Cross-reference extracted destination port against your console ports
-        if (dst_ip != "" && (dport == p_arr[1] || dport == p_arr[2])) {
-            print dst_ip
-            fflush()
+        # --- STRICT ENFORCEMENT FILTER ---
+        # Rule A: Matches your Xbox IP and your exact Xbox port allocation
+        # Rule B: Matches your Brother's Xbox IP and his exact port allocation
+        if ((src_ip == ip1 && sport == pt1) || (src_ip == ip2 && sport == pt2)) {
+            # Ensure we are capturing the external gaming server, never an internal broadcast
+            if (dst_ip != "" && dst_ip !~ /^(192\.168\.|10\.|172\.|255\.)/) {
+                print dst_ip
+                fflush()
+            }
         }
     }
 }' >> "$DUMP_FILE"
