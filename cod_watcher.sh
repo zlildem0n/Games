@@ -1,6 +1,6 @@
 #!/bin/sh
 # ==============================================================================
-# SCRIPT 1: RAW NETWORK SNIPER - ALL-EVENTS NATIVE RUNTIME (STAGE 1 - V9.5 - FIXED)
+# SCRIPT 1: RAW NETWORK SNIPER - HARDCODED WAN PROTECTION SHIELD (STAGE 1 - V9.6)
 # ==============================================================================
 DUMP_FILE="/root/COD_Dump.txt"
 
@@ -11,18 +11,18 @@ XBOX_1_PORT="49806"
 XBOX_2_IP="192.168.1.6"
 XBOX_2_PORT="49290"
 
-# Fetch your router's actual public WAN IP address dynamically to ensure it is filtered out
-MY_WAN_IP=$(24.229.189.181)
+# FIXED: Hardcoded strictly as a text value to stop command execution loops
+MY_WAN_IP="24.229.189.181"
 
 if [ ! -f "$DUMP_FILE" ]; then
     touch "$DUMP_FILE" && chmod 666 "$DUMP_FILE"
 fi
 
 echo "--- LIVE KERNEL NATIVE CONNTRACK PACKET SNIPER ACTIVE ---"
-echo "[*] Tracking ALL events for consoles. WAN Shield: $MY_WAN_IP"
+echo "[*] Tracking ALL events for consoles. Hardcoded WAN Shield: $MY_WAN_IP"
 echo "================================================================================"
 
-# ALL-EVENTS NATIVE STREAM: Removed the '-e NEW' constraint to capture every single packet flow status
+# ALL-EVENTS NATIVE STREAM
 (
     conntrack -E -p udp --src "$XBOX_1_IP" --sport "$XBOX_1_PORT" 2>/dev/null &
     conntrack -E -p udp --src "$XBOX_2_IP" --sport "$XBOX_2_PORT" 2>/dev/null &
@@ -39,15 +39,15 @@ echo "==========================================================================
         }
     }
     
-    # Phase 2: If verified, evaluate every single IP on the line regardless of text position shuffles
+    # Phase 2: Evaluate every unique IP on the connection event layout string
     if (is_console_flow == 1) {
         for (i = 1; i <= NF; i++) {
             if ($i ~ /^(src|dst)=/) {
                 split($i, p, "=")
                 current_ip = p[2]
                 
-                # STRICT ELIMINATION FILTER GATES:
-                # Ignore the IP if it matches a local network, loopback, or your live WAN IP address
+                # IRONCLAD SHIELD GATES:
+                # Instantly drop if the string matches your console IPs or your hardcoded WAN IP
                 if (current_ip != "" && 
                     current_ip != ip1 && 
                     current_ip != ip2 && 
@@ -56,7 +56,7 @@ echo "==========================================================================
                     current_ip !~ /^(192\.168\.|10\.|172\.|255\.)/) {
                     
                     server_ip = current_ip
-                    break # Successfully isolated the true external server target
+                    break # Isolated the true external server target cleanly
                 }
             }
         }
