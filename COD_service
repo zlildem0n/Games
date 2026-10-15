@@ -1,6 +1,6 @@
 #!/bin/sh
 # ==============================================================================
-# 4-TIER SERVICE CONTROLLER (IMPROVED)
+# COD SERVICE CONTROLLER
 # ==============================================================================
 SCRIPTS="cod_watcher.sh cod_geo_scanner.sh cod_promoter.sh cod_volume_filter.sh"
 
@@ -45,8 +45,17 @@ case "$1" in
         done
         echo "================================================================================"
         ;;
+    update)
+        echo "[*] Updating all scripts from GitHub..."
+        /root/COD_Updater
+        echo "[SUCCESS] Scripts updated."
+        ;;
+    update-geo)
+        echo "[*] Running GeoIP database update..."
+        /root/COD_Geo_Updater
+        ;;
     *)
-        echo "Usage: $0 {start|stop|restart|status}"
+        echo "Usage: $0 {start|stop|restart|status|update|update-geo}"
         exit 1
         ;;
 esac
