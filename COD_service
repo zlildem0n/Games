@@ -1,8 +1,10 @@
 #!/bin/sh
 # ==============================================================================
-# COD SERVICE CONTROLLER
+# COD SERVICE CONTROLLER (Full control + Updater)
 # ==============================================================================
 SCRIPTS="cod_watcher.sh cod_geo_scanner.sh cod_promoter.sh cod_volume_filter.sh"
+RAW_URL="https://raw.githubusercontent.com/zlildem0n/Games/main"
+TARGET="/root"
 
 case "$1" in
     start)
@@ -47,8 +49,30 @@ case "$1" in
         ;;
     update)
         echo "[*] Updating all scripts from GitHub..."
-        /root/COD_Updater
-        echo "[SUCCESS] Scripts updated."
+
+        # Core pipeline scripts
+        for f in cod_watcher.sh cod_geo_scanner.sh cod_promoter.sh cod_volume_filter.sh cod_blocked_review.sh; do
+            echo "  → $f"
+            curl -k -sSL "${RAW_URL}/${f}" -o "${TARGET}/${f}" && chmod 755 "${TARGET}/${f}"
+        done
+
+        # Control scripts
+        for f in COD_Service COD_Dashboard COD_Geo_Updater; do
+            echo "  → $f"
+            curl -k -sSL "${RAW_URL}/${f}" -o "${TARGET}/${f}" && chmod 755 "${TARGET}/${f}"
+        done
+
+        # Allowed list
+        echo "  → COD_States"
+        if curl -k -sSL "${RAW_URL}/COD_States" -o "${TARGET}/COD_States.new" && [ -s "${TARGET}/COD_States.new" ]; then
+            mv -f "${TARGET}/COD_States.new" "${TARGET}/COD_States"
+            chmod 644 "${TARGET}/COD_States"
+        fi
+
+        # Cleanup
+        rm -f /root/COD_Updater /root/COD_dashboard /root/COD_service /root/COD_updater /root/cod_failsafe.sh 2>/dev/null
+
+        echo "[SUCCESS] All scripts updated."
         ;;
     update-geo)
         echo "[*] Running GeoIP database update..."
