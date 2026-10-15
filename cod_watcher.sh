@@ -3,7 +3,7 @@
 # SCRIPT 1: RAW NETWORK SNIPER - KERNEL CONNTRACK EVENT ENGINE (STAGE 1)
 # ==============================================================================
 DUMP_FILE="/root/COD_Dump.txt"
-PORTS="49806,49290"
+PORTS="49806"
 
 if [ ! -f "$DUMP_FILE" ]; then
     touch "$DUMP_FILE" && chmod 666 "$DUMP_FILE"
