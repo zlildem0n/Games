@@ -12,7 +12,7 @@ XBOX_2_IP="192.168.1.6"
 XBOX_2_PORT="49290"
 
 # Fetch your router's actual public WAN IP address dynamically to ensure it is filtered out
-MY_WAN_IP=$(curl -s -4 --connect-timeout 2 https://ifconfig.me 2>/dev/null)
+MY_WAN_IP=$(24.229.189.181)
 
 if [ ! -f "$DUMP_FILE" ]; then
     touch "$DUMP_FILE" && chmod 666 "$DUMP_FILE"
