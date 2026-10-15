@@ -1,44 +1,56 @@
 #!/bin/sh
 # ==============================================================================
-# COD SERVICE CONTROLLER (Full control + Updater - Parent PID Matcher Fix)
+# COD SERVICE CONTROLLER - KERNEL CONNTRACK ENGINE COMPATIBLE (V4.6)
 # ==============================================================================
 SCRIPTS="cod_watcher.sh cod_geo_scanner.sh cod_promoter.sh cod_volume_filter.sh"
-RAW_URL="https://raw.githubusercontent.com/zlildem0n/Games/main"
+RAW_URL="https://github.com/zlildem0n/Games/tree/main"
 TARGET="/root"
 
 case "$1" in
     start)
-        echo "[*] Starting COD pipelines..."
-        for s in $SCRIPTS; do
-            if ! pgrep -o -f "$s" >/dev/null 2>&1; then
+        echo "[*] Starting COD unbuffered network pipelines..."
+        
+        # 1. Boot Stage 1 (Conntrack Engine Sniper) Natively into Background Space
+        if ! pgrep -f "cod_watcher.sh" >/dev/null 2>&1; then
+            /root/cod_watcher.sh >/dev/null 2>&1 &
+            echo "  + cod_watcher.sh (Kernel State Sniper)"
+            sleep 1
+        else
+            echo "  = cod_watcher.sh already running"
+        fi
+
+        # 2. Boot Remaining Filter and Promoter Automation Daemons safely
+        for s in cod_geo_scanner.sh cod_promoter.sh cod_volume_filter.sh; do
+            if ! pgrep -f "$s" >/dev/null 2>&1; then
                 /root/$s >/dev/null 2>&1 &
                 echo "  + $s"
+                sleep 0.5
             else
                 echo "  = $s already running"
             fi
         done
-        echo "[+] Start complete."
+        echo "[+] Core pipeline engines initialized."
         ;;
     stop)
-        echo "[*] Stopping COD pipelines..."
+        echo "[*] Terminating COD background processing threads..."
         for s in $SCRIPTS; do
             pgrep -f "$s" | xargs -r kill 2>/dev/null
-            sleep 0.3
+            sleep 0.2
             pgrep -f "$s" | xargs -r kill -9 2>/dev/null
         done
         echo "[+] Stopped."
         ;;
     restart)
         $0 stop
-        sleep 1
+        sleep 1.5
         $0 start
         ;;
     status)
         echo "================================================================================"
-        echo "                 COD PIPELINE STATUS"
+        echo "                 COD PIPELINE METRICS RUN-STATES"
         echo "================================================================================"
         for s in $SCRIPTS; do
-            # FIXED: -o isolates the true oldest/parent process ID, ignoring child pipeline subshells
+            # Isolates absolute primary tracking parent ID handles perfectly
             pids=$(pgrep -o -f "$s" | tr '\n' ' ')
             if [ -n "$pids" ]; then
                 printf "  %-22s : ONLINE  (PID: %s)\n" "$s" "$pids"
@@ -49,34 +61,24 @@ case "$1" in
         echo "================================================================================"
         ;;
     update)
-        echo "[*] Updating all scripts from GitHub..."
-
-        # Core pipeline scripts
+        echo "[*] Syncing frameworks from remote GitHub main branch..."
         for f in cod_watcher.sh cod_geo_scanner.sh cod_promoter.sh cod_volume_filter.sh cod_blocked_review.sh; do
             echo "  → $f"
             curl -k -sSL "${RAW_URL}/${f}" -o "${TARGET}/${f}" && chmod 755 "${TARGET}/${f}"
         done
-
-        # Control scripts
         for f in COD_Service COD_Dashboard COD_Geo_Updater; do
             echo "  → $f"
             curl -k -sSL "${RAW_URL}/${f}" -o "${TARGET}/${f}" && chmod 755 "${TARGET}/${f}"
         done
-
-        # Allowed list
         echo "  → COD_States"
         if curl -k -sSL "${RAW_URL}/COD_States" -o "${TARGET}/COD_States.new" && [ -s "${TARGET}/COD_States.new" ]; then
             mv -f "${TARGET}/COD_States.new" "${TARGET}/COD_States"
             chmod 644 "${TARGET}/COD_States"
         fi
-
-        # Cleanup
         rm -f /root/COD_Updater /root/COD_dashboard /root/COD_service /root/COD_updater /root/cod_failsafe.sh 2>/dev/null
-
-        echo "[SUCCESS] All scripts updated."
+        echo "[SUCCESS] All system tracking modules refreshed."
         ;;
     update-geo)
-        echo "[*] Running GeoIP database update..."
         /root/COD_Geo_Updater
         ;;
     *)
