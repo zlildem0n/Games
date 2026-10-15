@@ -1,6 +1,6 @@
 #!/bin/sh
 # ==============================================================================
-# SCRIPT 2: 3-TIER GEO FILTER
+# SCRIPT 2: 3-TIER GEO FILTER + LIVE IPINFO.IO API BACKUP
 # Country (US) → State (from GitHub) → City (from GitHub)
 # Writes individual IP + reason to blocked list
 # ==============================================================================
@@ -24,7 +24,7 @@ fi
 
 touch "$PRE_PENDING_FILE" "$BLOCKED_FILE" 2>/dev/null
 
-echo "--- LIVE STAGE 2: 3-TIER FILTER (GitHub list) ONLINE ---"
+echo "--- LIVE STAGE 2: 3-TIER FILTER + LIVE API BACKUP ONLINE ---"
 
 is_known() {
     grep -q "^$1" "$PRE_PENDING_FILE" 2>/dev/null || \
@@ -54,11 +54,39 @@ tail -F -n +1 "$DUMP_FILE" 2>/dev/null | while read -r RAW_IP; do
     fi
 
     # --------------------------------------------------------------------------
-    # TIER 1: Country must be US
+    # PHASE 1: LOCAL MAXMIND OFFLINE DATABASE LOOKUP
     # --------------------------------------------------------------------------
     COUNTRY=$(mmdblookup --file "$MMDB_FILE" --ip "$SERVER_IP" country iso_code 2>/dev/null \
+
               | grep -oE '"[A-Z]{2}"' | tr -d '"' | head -1)
 
+    REGION=$(mmdblookup --file "$MMDB_FILE" --ip "$SERVER_IP" subdivisions 0 iso_code 2>/dev/null \
+
+             | grep -oE '"[A-Z]{2}"' | tr -d '"' | head -1)
+
+    CITY=$(mmdblookup --file "$MMDB_FILE" --ip "$SERVER_IP" city names en 2>/dev/null \
+
+           | grep -oE '"[^"]+"' | tr -d '"' | head -1)
+    CITY=$(echo "$CITY" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
+
+    # --------------------------------------------------------------------------
+    # PHASE 2: IPINFO.IO API LIVE BACKUP CORE INTERCEPT
+    # --------------------------------------------------------------------------
+    # Triggers an API lookup if any of the three localized tiers return blank
+    if [ -z "$COUNTRY" ] || [ -z "$REGION" ] || [ -z "$CITY" ]; then
+        API_PAYLOAD=$(curl -s --connect-timeout 3 "https://ipinfo.io{SERVER_IP}/json")
+        
+        if [ -n "$API_PAYLOAD" ] && ! echo "$API_PAYLOAD" | grep -qi "error"; then
+            [ -z "$COUNTRY" ] && COUNTRY=$(echo "$API_PAYLOAD" | grep -oP '"country":\s*"\K[^"]+')
+            [ -z "$REGION" ]  && REGION=$(echo "$API_PAYLOAD" | grep -oP '"region_code":\s*"\K[^"]+')
+            [ -z "$CITY" ]    && CITY=$(echo "$API_PAYLOAD" | grep -oP '"city":\s*"\K[^"]+')
+            CITY=$(echo "$CITY" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
+        fi
+    fi
+
+    # --------------------------------------------------------------------------
+    # TIER 1: Country Validation Gate
+    # --------------------------------------------------------------------------
     if [ -z "$COUNTRY" ] || [ "$COUNTRY" != "US" ]; then
         [ -z "$COUNTRY" ] && COUNTRY="UNKNOWN"
         echo "$SERVER_IP | Note: [Tier 1] Non-US ($COUNTRY)" >> "$BLOCKED_FILE"
@@ -66,11 +94,8 @@ tail -F -n +1 "$DUMP_FILE" 2>/dev/null | while read -r RAW_IP; do
     fi
 
     # --------------------------------------------------------------------------
-    # TIER 2: State must be in the GitHub list
+    # TIER 2: State Validation Gate
     # --------------------------------------------------------------------------
-    REGION=$(mmdblookup --file "$MMDB_FILE" --ip "$SERVER_IP" subdivisions 0 iso_code 2>/dev/null \
-             | grep -oE '"[A-Z]{2}"' | tr -d '"' | head -1)
-
     if [ -z "$REGION" ] || ! in_list "$REGION"; then
         [ -z "$REGION" ] && REGION="UNKNOWN"
         echo "$SERVER_IP | Note: [Tier 2] State not in list ($REGION)" >> "$BLOCKED_FILE"
@@ -78,19 +103,15 @@ tail -F -n +1 "$DUMP_FILE" 2>/dev/null | while read -r RAW_IP; do
     fi
 
     # --------------------------------------------------------------------------
-    # TIER 3: City must be in the GitHub list
+    # TIER 3: City Validation Gate
     # --------------------------------------------------------------------------
-    CITY=$(mmdblookup --file "$MMDB_FILE" --ip "$SERVER_IP" city names en 2>/dev/null \
-           | grep -oE '"[^"]+"' | tr -d '"' | head -1)
-    CITY=$(echo "$CITY" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
-
     if [ -z "$CITY" ]; then
         echo "$SERVER_IP | Note: [Tier 3] Unknown City ($REGION)" >> "$BLOCKED_FILE"
         continue
     fi
 
     if in_list "$CITY"; then
-        # All tiers passed
+        # All tiers passed successfully
         echo "$SERVER_IP" >> "$PRE_PENDING_FILE"
     else
         echo "$SERVER_IP | Note: [Tier 3] City not in list ($CITY, $REGION)" >> "$BLOCKED_FILE"
