@@ -1,17 +1,14 @@
 #!/bin/sh
 # ==============================================================================
-# SCRIPT 2: 3-TIER GEO FILTER + LIVE IPINFO.IO API BACKUP
-# Country (US) → State (from GitHub) → City (from GitHub)
-# Writes individual IP + reason to blocked list
+# SCRIPT 2: 3-TIER GEO FILTER + LIVE IPINFO.IO API BACKUP (SINGLE IP STRICT)
 # ==============================================================================
 DUMP_FILE="/root/COD_Dump.txt"
 PRE_PENDING_FILE="/root/COD_Pre_Pending.txt"
 BLOCKED_FILE="/root/COD_Blocked.txt"
 CONFIG_LIST="/root/COD_States"
 MMDB_FILE="/root/GeoLite2-City.mmdb"
-REMOTE_STATES="https://raw.githubusercontent.com/zlildem0n/Games/refs/heads/main/COD_States"
+REMOTE_STATES="https://githubusercontent.com"
 
-# Download latest list from GitHub
 echo "[*] Fetching latest COD_States from GitHub..."
 if curl -k -sSL --connect-timeout 10 "$REMOTE_STATES" -o "${CONFIG_LIST}.tmp" && [ -s "${CONFIG_LIST}.tmp" ]; then
     mv -f "${CONFIG_LIST}.tmp" "$CONFIG_LIST"
@@ -24,14 +21,13 @@ fi
 
 touch "$PRE_PENDING_FILE" "$BLOCKED_FILE" 2>/dev/null
 
-echo "--- LIVE STAGE 2: 3-TIER FILTER + LIVE API BACKUP ONLINE ---"
+echo "--- LIVE STAGE 2: 3-TIER FILTER (SINGLE IP STRICT) ONLINE ---"
 
 is_known() {
-    grep -q "^$1" "$PRE_PENDING_FILE" 2>/dev/null || \
-    grep -q "^$1" "$BLOCKED_FILE" 2>/dev/null
+    grep -q "^$1$" "$PRE_PENDING_FILE" 2>/dev/null || \
+    grep -q "^$1 " "$BLOCKED_FILE" 2>/dev/null
 }
 
-# Helper: check if value exists in the config list
 in_list() {
     value="$1"
     [ ! -f "$CONFIG_LIST" ] && return 1
@@ -56,26 +52,16 @@ tail -F -n +1 "$DUMP_FILE" 2>/dev/null | while read -r RAW_IP; do
     # --------------------------------------------------------------------------
     # PHASE 1: LOCAL MAXMIND OFFLINE DATABASE LOOKUP
     # --------------------------------------------------------------------------
-    COUNTRY=$(mmdblookup --file "$MMDB_FILE" --ip "$SERVER_IP" country iso_code 2>/dev/null \
-
-              | grep -oE '"[A-Z]{2}"' | tr -d '"' | head -1)
-
-    REGION=$(mmdblookup --file "$MMDB_FILE" --ip "$SERVER_IP" subdivisions 0 iso_code 2>/dev/null \
-
-             | grep -oE '"[A-Z]{2}"' | tr -d '"' | head -1)
-
-    CITY=$(mmdblookup --file "$MMDB_FILE" --ip "$SERVER_IP" city names en 2>/dev/null \
-
-           | grep -oE '"[^"]+"' | tr -d '"' | head -1)
+    COUNTRY=$(mmdblookup --file "$MMDB_FILE" --ip "$SERVER_IP" country iso_code 2>/dev/null | grep -oE '"[A-Z]{2}"' | tr -d '"' | head -1)
+    REGION=$(mmdblookup --file "$MMDB_FILE" --ip "$SERVER_IP" subdivisions 0 iso_code 2>/dev/null | grep -oE '"[A-Z]{2}"' | tr -d '"' | head -1)
+    CITY=$(mmdblookup --file "$MMDB_FILE" --ip "$SERVER_IP" city names en 2>/dev/null | grep -oE '"[^"]+"' | tr -d '"' | head -1)
     CITY=$(echo "$CITY" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
 
     # --------------------------------------------------------------------------
     # PHASE 2: IPINFO.IO API LIVE BACKUP CORE INTERCEPT
     # --------------------------------------------------------------------------
-    # Triggers an API lookup if any of the three localized tiers return blank
     if [ -z "$COUNTRY" ] || [ -z "$REGION" ] || [ -z "$CITY" ]; then
         API_PAYLOAD=$(curl -s --connect-timeout 3 "https://ipinfo.io{SERVER_IP}/json")
-        
         if [ -n "$API_PAYLOAD" ] && ! echo "$API_PAYLOAD" | grep -qi "error"; then
             [ -z "$COUNTRY" ] && COUNTRY=$(echo "$API_PAYLOAD" | grep -oP '"country":\s*"\K[^"]+')
             [ -z "$REGION" ]  && REGION=$(echo "$API_PAYLOAD" | grep -oP '"region_code":\s*"\K[^"]+')
@@ -111,7 +97,6 @@ tail -F -n +1 "$DUMP_FILE" 2>/dev/null | while read -r RAW_IP; do
     fi
 
     if in_list "$CITY"; then
-        # All tiers passed successfully
         echo "$SERVER_IP" >> "$PRE_PENDING_FILE"
     else
         echo "$SERVER_IP | Note: [Tier 3] City not in list ($CITY, $REGION)" >> "$BLOCKED_FILE"
