@@ -9,7 +9,7 @@ PORTS="49806 or 49290"
 MAX_LINES=50000
 
 # Optional: put your public WAN IP here to ignore it
-WAN_IP=""
+WAN_IP="24.229.189.181"
 
 touch "$DUMP_FILE" "$MASTER_FILE" 2>/dev/null
 chmod 666 "$DUMP_FILE" 2>/dev/null
