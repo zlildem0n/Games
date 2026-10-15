@@ -1,60 +1,41 @@
-#!/bin/sh
-# ==============================================================================
-# SCRIPT 1: UDP NETWORK CAPTURE
-# Captures individual IPv4 addresses matching the specified port rules.
-# ==============================================================================
+#!/bin/bash
 
-DUMP_FILE="/root/COD_Dump.txt"
-INTERFACE="eth4"
+# Script 1 — UniFi Xbox UDP traffic capture
+# Interface: eth4
+# Output: /root/COD_Dump.txt
 
-# Ensure the dump file exists and is writable by this process.
-if ! touch "$DUMP_FILE"; then
-    echo "[ERROR] Cannot create or access $DUMP_FILE" >&2
-    exit 1
-fi
+set -u
 
-chmod 600 "$DUMP_FILE" 2>/dev/null
+IFACE="eth4"
+LOG="/root/COD_Dump.txt"
+
+# Xbox ports paired with the game-server candidate range
+GAME_FILTER='udp and (port 49806 or port 49290) and portrange 30000-50000'
+
+# Xbox service traffic on ports 3074 and 3544
+SERVICE_FILTER='udp and (port 49806 or port 49290) and (port 3074 or port 3544)'
 
 if ! command -v tcpdump >/dev/null 2>&1; then
-    echo "[ERROR] tcpdump is not installed." >&2
+    echo "ERROR: tcpdump is not installed."
     exit 1
 fi
 
-echo "--- LIVE UDP NETWORK CAPTURE ACTIVE ---"
-echo "[*] Interface: $INTERFACE"
-echo "[*] Required port: 49806 or 49290"
-echo "[*] Matching port range: 30000-50000"
-echo "[*] Output: $DUMP_FILE"
-echo "============================================================"
+if ! ip link show "$IFACE" >/dev/null 2>&1; then
+    echo "ERROR: Interface $IFACE was not found."
+    exit 1
+fi
 
-tcpdump -i "$INTERFACE" -nn -l \
-    'udp and (port 49806 or port 49290) and portrange 30000-50000' \
-    2>/dev/null |
-awk '
-{
-    # Extract IPv4 endpoints from tcpdump output.
-    # Expected format includes: 192.0.2.10.49806 > 192.0.2.20.35000
-    for (i = 1; i <= NF; i++) {
-        if ($i == ">") {
-            src = $(i-1)
-            dst = $(i+1)
+touch "$LOG" || {
+    echo "ERROR: Cannot write to $LOG"
+    exit 1
+}
 
-            sub(/\.$/, "", src)
-            sub(/\.$/, "", dst)
+chmod 600 "$LOG"
 
-            # Remove the final .PORT component.
-            sub(/\.[0-9]+$/, "", src)
-            sub(/\.[0-9]+$/, "", dst)
+echo "Starting capture on $IFACE"
+echo "Output: $LOG"
+echo "Press Ctrl+C to stop."
 
-            if (src ~ /^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$/) {
-                print src
-                fflush()
-            }
-
-            if (dst ~ /^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$/) {
-                print dst
-                fflush()
-            }
-        }
-    }
-}' >> "$DUMP_FILE"
+tcpdump -ni "$IFACE" -l -tttt \
+    "(($GAME_FILTER) or ($SERVICE_FILTER))" \
+    >> "$LOG" 2>&1
