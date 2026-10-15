@@ -1,6 +1,6 @@
 #!/bin/sh
 # ==============================================================================
-# SCRIPT 1: RAW NETWORK SNIPER - EXCLUSIVE DESTINATION IP GATING (STAGE 1 - V11.7)
+# SCRIPT 1: RAW NETWORK SNIPER - EXCLUSIVE DESTINATION IP GATING (STAGE 1 - V11.8)
 # ==============================================================================
 DUMP_FILE="/root/COD_Dump.txt"
 PRE_PENDING_FILE="/root/COD_Pre_Pending.txt"
@@ -23,14 +23,15 @@ echo "==========================================================================
 conntrack -E -p udp 2>/dev/null | awk -v pt1="$XBOX_1_PORT" -v pt2="$XBOX_2_PORT" \
 -v dump="$DUMP_FILE" -v pre="$PRE_PENDING_FILE" -v post="$POST_PENDING_FILE" -v mast="$MASTER_FILE" '
 BEGIN {
-    # Initialize historical files into RAM memory lanes immediately on boot
+    # Initialize historical files into RAM memory lanes safely on boot
     while ((getline line < dump) > 0)  { if (line != "") seen[line] = 1 } close(dump)
     while ((getline line < pre) > 0)   { if (line != "") seen[line] = 1 } close(pre)
     while ((getline line < post) > 0)  { if (line != "") seen[line] = 1 } close(post)
     while ((getline line < mast) > 0)  { 
         if (line != "") {
             split(line, m_parts, " ")
-            seen[m_parts] = 1 
+            # FIXED: Explicit index handling array constraints mapped to RAM
+            seen[m_parts[1]] = 1 
         }
     } close(mast)
 }
