@@ -1,8 +1,11 @@
 #!/bin/sh
 # ==============================================================================
-# SCRIPT 1: RAW NETWORK SNIPER - HARDCODED WAN PROTECTION SHIELD (STAGE 1 - V9.6)
+# SCRIPT 1: RAW NETWORK SNIPER - ALL-EVENTS + EXPANDED DUPLICATE GUARD (V9.8)
 # ==============================================================================
 DUMP_FILE="/root/COD_Dump.txt"
+PRE_PENDING_FILE="/root/COD_Pre_Pending.txt"
+POST_PENDING_FILE="/root/COD_Post_Pending.txt"
+MASTER_FILE="/root/COD_Master.txt"
 
 # Console Target Profiles
 XBOX_1_IP="192.168.1.15"
@@ -11,7 +14,7 @@ XBOX_1_PORT="49806"
 XBOX_2_IP="192.168.1.6"
 XBOX_2_PORT="49290"
 
-# FIXED: Hardcoded strictly as a text value to stop command execution loops
+# HARDCODED SAFETY SHIELD: Your exact public WAN IP address locked permanently
 MY_WAN_IP="24.229.189.181"
 
 if [ ! -f "$DUMP_FILE" ]; then
@@ -19,52 +22,44 @@ if [ ! -f "$DUMP_FILE" ]; then
 fi
 
 echo "--- LIVE KERNEL NATIVE CONNTRACK PACKET SNIPER ACTIVE ---"
-echo "[*] Tracking ALL events for consoles. Hardcoded WAN Shield: $MY_WAN_IP"
+echo "[*] Tracking ALL events for consoles. Multi-Queue Duplicate Guard Armed."
 echo "================================================================================"
 
 # ALL-EVENTS NATIVE STREAM
-(
-    conntrack -E -p udp --src "$XBOX_1_IP" --sport "$XBOX_1_PORT" 2>/dev/null &
-    conntrack -E -p udp --src "$XBOX_2_IP" --sport "$XBOX_2_PORT" 2>/dev/null &
-    wait
-) | awk -v ip1="$XBOX_1_IP" -v pt1="$XBOX_1_PORT" -v ip2="$XBOX_2_IP" -v pt2="$XBOX_2_PORT" -v wan="$MY_WAN_IP" '
-{
-    is_console_flow = 0
-    server_ip = ""
-    
-    # Phase 1: Verify the line belongs to one of your targeted gaming console ports
-    for (i = 1; i <= NF; i++) {
-        if ($i == "sport="pt1 || $i == "dport="pt1 || $i == "sport="pt2 || $i == "dport="pt2) {
-            is_console_flow = 1
-        }
-    }
-    
-    # Phase 2: Evaluate every unique IP on the connection event layout string
-    if (is_console_flow == 1) {
-        for (i = 1; i <= NF; i++) {
-            if ($i ~ /^(src|dst)=/) {
-                split($i, p, "=")
-                current_ip = p[2]
-                
-                # IRONCLAD SHIELD GATES:
-                # Instantly drop if the string matches your console IPs or your hardcoded WAN IP
-                if (current_ip != "" && 
-                    current_ip != ip1 && 
-                    current_ip != ip2 && 
-                    current_ip != wan && 
-                    current_ip != "127.0.0.1" && 
-                    current_ip !~ /^(192\.168\.|10\.|172\.|255\.)/) {
-                    
-                    server_ip = current_ip
-                    break # Isolated the true external server target cleanly
-                }
-            }
-        }
+conntrack -E -p udp 2>/dev/null | while read -r LINE; do
+    # 1. Quick confirmation gate: check if line text belongs to your console target port streams
+    if echo "$LINE" | grep -qE "sport=($XBOX_1_PORT|$XBOX_2_PORT)|dport=($XBOX_1_PORT|$XBOX_2_PORT)"; then
         
-        # Print only the verified game server destination
-        if (server_ip != "") {
-            print server_ip
-            fflush()
-        }
-    }
-}' >> "$DUMP_FILE"
+        # 2. Extract every IP parameter block on the line using clean string splitting rules
+        SERVER_IP=""
+        for word in $LINE; do
+            if echo "$word" | grep -qE '^(src|dst)='; then
+                current_ip=$(echo "$word" | cut -d= -f2)
+                
+                # IRONCLAD SHIELD GATES: Instantly filter out LAN subnets, loopbacks, and your WAN IP
+                if [ -n "$current_ip" ] && \
+                   [ "$current_ip" != "$XBOX_1_IP" ] && \
+                   [ "$current_ip" != "$XBOX_2_IP" ] && \
+                   [ "$current_ip" != "$MY_WAN_IP" ] && \
+                   [ "$current_ip" != "127.0.0.1" ] && \
+                   ! echo "$current_ip" | grep -qE '^(192\.168\.|10\.|172\.|255\.)'; then
+                    
+                    SERVER_IP="$current_ip"
+                    break # Target isolated successfully
+                fi
+            fi
+        done
+        
+        # 3. 🚨 EXPANDED MULTI-FILE DUPLICATE SHIELD LAYER
+        # Before printing, check ALL active pipeline queues including Stage 4 and Stage 5
+        if [ -n "$SERVER_IP" ]; then
+            if ! grep -q "^${SERVER_IP}$" "$DUMP_FILE" 2>/dev/null && \
+               ! grep -q "^${SERVER_IP}$" "$PRE_PENDING_FILE" 2>/dev/null && \
+               ! grep -q "^${SERVER_IP}$" "$POST_PENDING_FILE" 2>/dev/null && \
+               ! grep -q "^${SERVER_IP} " "$MASTER_FILE" 2>/dev/null; then
+                
+                echo "$SERVER_IP" >> "$DUMP_FILE"
+            fi
+        fi
+    fi
+done
