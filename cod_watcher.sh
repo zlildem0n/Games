@@ -22,8 +22,8 @@ echo "==========================================================================
 # UNBUFFERED DUAL-STREAM PIPELINE: Fires up two isolated, native hardware filters concurrently
 # This instructs the kernel to drop everything else and output ONLY your exact console match events.
 (
-    conntrack -E -p udp -e NEW --src "$XBOX_1_IP" --sport "$XBOX_1_PORT" 2>/dev/null &
-    conntrack -E -p udp -e NEW --src "$XBOX_2_IP" --sport "$XBOX_2_PORT" 2>/dev/null &
+    conntrack -E -p udp -e --src "$XBOX_1_IP" --sport "$XBOX_1_PORT" 2>/dev/null &
+    conntrack -E -p udp -e --src "$XBOX_2_IP" --sport "$XBOX_2_PORT" 2>/dev/null &
     wait
 ) | awk '
 {
