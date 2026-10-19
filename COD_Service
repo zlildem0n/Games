@@ -1,9 +1,9 @@
 #!/bin/sh
 # ==============================================================================
-# COD SERVICE CONTROLLER - PRECISE MATCH ENGINE + SUBNET UPDATER (V4.9)
+# COD SERVICE CONTROLLER - EXPLICIT PATH FRAMEWORK (V5.0)
 # ==============================================================================
 SCRIPTS="cod_watcher.sh cod_geo_scanner.sh cod_promoter.sh cod_volume_filter.sh"
-RAW_URL="https://raw.githubusercontent.com/zlildem0n/Games/main"
+RAW_URL="https://raw.githubusercontent.com/zlildem0n/Games/refs/heads/main"
 TARGET="/root"
 
 case "$1" in
@@ -11,7 +11,6 @@ case "$1" in
         echo "[*] Starting COD unbuffered network pipelines..."
         
         # 1. Boot Stage 1 (Conntrack Engine Sniper) with strict string validation
-        # By adding a bracket [c]od, pgrep ignores the running controller script line text
         if ! pgrep -f "[c]od_watcher.sh" >/dev/null 2>&1; then
             /root/cod_watcher.sh >/dev/null 2>&1 &
             echo "  + cod_watcher.sh (Kernel State Sniper)"
@@ -22,7 +21,6 @@ case "$1" in
 
         # 2. Boot Remaining Filter and Promoter Automation Daemons safely
         for s in cod_geo_scanner.sh cod_promoter.sh cod_volume_filter.sh; do
-            # Slices string dynamically to prevent self-matching clashes
             first_char=$(echo "$s" | cut -c1)
             rest_chars=$(echo "$s" | cut -c2-)
             pattern="[$first_char]$rest_chars"
@@ -72,7 +70,7 @@ case "$1" in
     update)
         echo "[*] Syncing frameworks from remote GitHub main branch..."
         
-        # FIXED: Automatically downloads and refreshes your sorted hardware block file list on every update
+        # IRONCLAD FIXED PATH: Pointing directly to your raw branch block layout
         echo "  → COD_IPS (Updating Hardware Block Matrix Layer)"
         curl -k -sSL "${RAW_URL}/COD_IPS" -o "${TARGET}/COD_Hardware_Blocks" && chmod 644 "${TARGET}/COD_Hardware_Blocks"
 
