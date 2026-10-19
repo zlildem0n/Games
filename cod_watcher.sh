@@ -1,6 +1,6 @@
 #!/bin/sh
 # ==============================================================================
-# SCRIPT 1: RAW NETWORK SNIPER - PURE PORT GATED SUBNET FILTER (V12.3)
+# SCRIPT 1: RAW NETWORK SNIPER - PURE PORT GATED SUBNET FILTER (V12.4)
 # ==============================================================================
 DUMP_FILE="/root/COD_Dump.txt"
 PRE_PENDING_FILE="/root/COD_Pre_Pending.txt"
@@ -47,17 +47,24 @@ BEGIN {
     } close(blocks)
 }
 {
-    # FAST TOP-GATE CHECK: Ensure the line physically matches your strict port constraints
-    # If the line does not explicitly contain sport=49806 or sport=49290, skip it instantly!
+    # FAST TOP-GATE CHECK: Only look at lines starting with [NEW] or [UPDATE] to avoid processing garbage
     if ($0 ~ "sport="pt1 || $0 ~ "sport="pt2) {
         
         sport = ""; dst_ip = ""; dport = 0
+        sport_count = 0; dst_count = 0; dport_count = 0
         
-        # Parse fields from the absolute original outbound direction block ONLY
-        for (i = 1; i <= 7; i++) {
-            if ($i ~ /^sport=/) { split($i, p, "="); sport = p[2] }
-            if ($i ~ /^dst=/)   { split($i, p, "="); dst_ip = p[2] }
-            if ($i ~ /^dport=/) { split($i, p, "="); dport = int(p[2]) }
+        # FIXED: Loop through all fields on the line dynamically (NF) instead of cutting off at field 7
+        for (i = 1; i <= NF; i++) {
+            if ($i ~ /^sport=/) { 
+                sport_count++; if (sport_count == 1) { split($i, p, "="); sport = p[2] } 
+            }
+            if ($i ~ /^dst=/) { 
+                dst_count++; if (dst_count == 1) { split($i, p, "="); dst_ip = p[2] } 
+            }
+            if ($i ~ /^dport=/) { 
+                dport_count++; if (dport_count == 1) { split($i, p, "="); dport = int(p[2]) } 
+            }
+            if (sport_count >= 1 && dst_count >= 1 && dport_count >= 1) { break }
         }
 
         # HARD ENFORCEMENT: Enforce your exact sport profiles and your 30000-50000 dport range strictly
@@ -70,7 +77,7 @@ BEGIN {
                 split(dst_ip, ip_parts, ".")
                 current_subnet = ip_parts[1] "." ip_parts[2] "." ip_parts[3] ".0/24"
                 
-                # 🚨 THE EXEMPTION BYPASS AND SUB-FILTER CORE
+                # THE EXEMPTION BYPASS AND SUB-FILTER CORE
                 if (current_subnet == "20.201.200.0/24") {
                     if (!(dst_ip in seen)) {
                         seen[dst_ip] = 1
