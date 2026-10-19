@@ -1,6 +1,6 @@
 #!/bin/sh
 # ==============================================================================
-# SCRIPT 1: RAW NETWORK SNIPER - NATIVE SUBNET ELIMINATION ENGINE (V12.0)
+# SCRIPT 1: RAW NETWORK SNIPER - PURE PORT GATED SUBNET FILTER (V12.3)
 # ==============================================================================
 DUMP_FILE="/root/COD_Dump.txt"
 PRE_PENDING_FILE="/root/COD_Pre_Pending.txt"
@@ -21,10 +21,10 @@ if [ ! -f "$NET_BLOCKS" ]; then
 fi
 
 echo "--- LIVE KERNEL NATIVE CONNTRACK PACKET SNIPER ACTIVE ---"
-echo "[*] Dual-Port Lockdown Active: sport ($XBOX_1_PORT|$XBOX_2_PORT) --> dport (30000-50000)"
+echo "[*] Strict Gating: sport ($XBOX_1_PORT|$XBOX_2_PORT) --> dport (30000-50000)"
 echo "================================================================================"
 
-# Stream unbuffered flows natively from netfilter into high-speed memory matrix
+# Stream unbuffered flows natively from netfilter into your pure filter matrix
 conntrack -E -p udp 2>/dev/null | awk -v pt1="$XBOX_1_PORT" -v pt2="$XBOX_2_PORT" \
 -v dump="$DUMP_FILE" -v pre="$PRE_PENDING_FILE" -v post="$POST_PENDING_FILE" -v mast="$MASTER_FILE" -v blocks="$NET_BLOCKS" '
 BEGIN {
@@ -47,43 +47,46 @@ BEGIN {
     } close(blocks)
 }
 {
-    sport = ""; dst_ip = ""; dport = 0
-    sport_count = 0; dst_count = 0; dport_count = 0
+    # FAST TOP-GATE CHECK: Ensure the line physically matches your strict port constraints
+    # If the line does not explicitly contain sport=49806 or sport=49290, skip it instantly!
+    if ($0 ~ "sport="pt1 || $0 ~ "sport="pt2) {
+        
+        sport = ""; dst_ip = ""; dport = 0
+        
+        # Parse fields from the absolute original outbound direction block ONLY
+        for (i = 1; i <= 7; i++) {
+            if ($i ~ /^sport=/) { split($i, p, "="); sport = p[2] }
+            if ($i ~ /^dst=/)   { split($i, p, "="); dst_ip = p[2] }
+            if ($i ~ /^dport=/) { split($i, p, "="); dport = int(p[2]) }
+        }
 
-    # Isolate strictly the absolute first instance of the connection parameters
-    for (i = 1; i <= NF; i++) {
-        if ($i ~ /^sport=/) {
-            sport_count++
-            if (sport_count == 1) { split($i, p, "="); sport = p[2] }
-        }
-        if ($i ~ /^dst=/) {
-            dst_count++
-            if (dst_count == 1) { split($i, p, "="); dst_ip = p[2] }
-        }
-        if ($i ~ /^dport=/) {
-            dport_count++
-            if (dport_count == 1) { split($i, p, "="); dport = int(p[2]) }
-        }
-        if (sport_count >= 1 && dst_count >= 1 && dport_count >= 1) { break }
-    }
-
-    # DOUBLE-PORT + FIRST DST LOCKDOWN GATE
-    if ((sport == pt1 || sport == pt2) && (dport >= 30000 && dport <= 50000)) {
-        if (dst_ip != "" && dst_ip !~ /^(192\.168\.|10\.|172\.|255\.|127\.)/) {
+        # HARD ENFORCEMENT: Enforce your exact sport profiles and your 30000-50000 dport range strictly
+        if ((sport == pt1 || sport == pt2) && (dport >= 30000 && dport <= 50000)) {
             
-            # Convert incoming IP address into its true /24 subnet string format
-            split(dst_ip, ip_parts, ".")
-            current_subnet = ip_parts[1] "." ip_parts[2] "." ip_parts[3] ".0/24"
-            
-            # THE HARDWARE BLOCK MATRIX SHIELD GATES
-            # Instantly drop the packet if its /24 subnet is found inside your GitHub RAM table
-            if (!(current_subnet in banned_subnets)) {
-                if (!(dst_ip in seen)) {
-                    seen[dst_ip] = 1
-                    print dst_ip >> dump
-                    fflush(dump)
+            # Discard any local loopbacks or local home network broadcasts safely
+            if (dst_ip != "" && dst_ip !~ /^(192\.168\.|10\.|172\.|255\.|127\.)/) {
+                
+                # Natively calculate the true /24 subnet string layout cleanly
+                split(dst_ip, ip_parts, ".")
+                current_subnet = ip_parts[1] "." ip_parts[2] "." ip_parts[3] ".0/24"
+                
+                # 🚨 THE EXEMPTION BYPASS AND SUB-FILTER CORE
+                if (current_subnet == "20.201.200.0/24") {
+                    if (!(dst_ip in seen)) {
+                        seen[dst_ip] = 1
+                        print dst_ip >> dump
+                        fflush(dump)
+                    }
+                } else {
+                    if (!(current_subnet in banned_subnets)) {
+                        if (!(dst_ip in seen)) {
+                            seen[dst_ip] = 1
+                            print dst_ip >> dump
+                            fflush(dump)
+                        }
+                    }
                 }
             }
         }
     }
-}'
+}
