@@ -1,6 +1,6 @@
 #!/bin/sh
 # ==============================================================================
-# COD SERVICE CONTROLLER - PRECISE MATCH ENGINE (V4.8)
+# COD SERVICE CONTROLLER - PRECISE MATCH ENGINE + SUBNET UPDATER (V4.9)
 # ==============================================================================
 SCRIPTS="cod_watcher.sh cod_geo_scanner.sh cod_promoter.sh cod_volume_filter.sh"
 RAW_URL="https://raw.githubusercontent.com/zlildem0n/Games/main"
@@ -71,21 +71,32 @@ case "$1" in
         ;;
     update)
         echo "[*] Syncing frameworks from remote GitHub main branch..."
+        
+        # FIXED: Automatically downloads and refreshes your sorted hardware block file list on every update
+        echo "  → COD_IPS (Updating Hardware Block Matrix Layer)"
+        curl -k -sSL "${RAW_URL}/COD_IPS" -o "${TARGET}/COD_Hardware_Blocks" && chmod 644 "${TARGET}/COD_Hardware_Blocks"
+
+        # Core pipeline scripts
         for f in cod_watcher.sh cod_geo_scanner.sh cod_promoter.sh cod_volume_filter.sh cod_blocked_review.sh; do
             echo "  → $f"
             curl -k -sSL "${RAW_URL}/${f}" -o "${TARGET}/${f}" && chmod 755 "${TARGET}/${f}"
         done
+
+        # Control scripts
         for f in COD_Service COD_Dashboard COD_Geo_Updater; do
             echo "  → $f"
             curl -k -sSL "${RAW_URL}/${f}" -o "${TARGET}/${f}" && chmod 755 "${TARGET}/${f}"
         done
+
+        # Allowed configurations list
         echo "  → COD_States"
         if curl -k -sSL "${RAW_URL}/COD_States" -o "${TARGET}/COD_States.new" && [ -s "${TARGET}/COD_States.new" ]; then
             mv -f "${TARGET}/COD_States.new" "${TARGET}/COD_States"
             chmod 644 "${TARGET}/COD_States"
         fi
+
         rm -f /root/COD_Updater /root/COD_dashboard /root/COD_service /root/COD_updater /root/cod_failsafe.sh 2>/dev/null
-        echo "[SUCCESS] All system tracking modules refreshed."
+        echo "[SUCCESS] All system tracking modules and IP blocks completely refreshed."
         ;;
     update-geo)
         /root/COD_Geo_Updater
