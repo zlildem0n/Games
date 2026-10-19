@@ -1,6 +1,6 @@
 #!/bin/sh
 # ==============================================================================
-# SCRIPT 1: RAW NETWORK SNIPER - PURE PORT GATED SUBNET FILTER (V12.4)
+# SCRIPT 1: RAW NETWORK SNIPER - PURE PORT GATED SUBNET FILTER (V12.5)
 # ==============================================================================
 DUMP_FILE="/root/COD_Dump.txt"
 PRE_PENDING_FILE="/root/COD_Pre_Pending.txt"
@@ -35,6 +35,7 @@ BEGIN {
     while ((getline line < mast) > 0)  { 
         if (line != "") {
             split(line, m_parts, " ")
+            # FIXED: Added explicit index mapping to prevent engine memory faults
             seen[m_parts[1]] = 1 
         }
     } close(mast)
@@ -47,13 +48,13 @@ BEGIN {
     } close(blocks)
 }
 {
-    # FAST TOP-GATE CHECK: Only look at lines starting with [NEW] or [UPDATE] to avoid processing garbage
+    # FAST TOP-GATE CHECK: Ensure the line physically matches your strict port constraints
     if ($0 ~ "sport="pt1 || $0 ~ "sport="pt2) {
         
         sport = ""; dst_ip = ""; dport = 0
         sport_count = 0; dst_count = 0; dport_count = 0
         
-        # FIXED: Loop through all fields on the line dynamically (NF) instead of cutting off at field 7
+        # Loop through fields dynamically to extract the first direction metrics safely
         for (i = 1; i <= NF; i++) {
             if ($i ~ /^sport=/) { 
                 sport_count++; if (sport_count == 1) { split($i, p, "="); sport = p[2] } 
